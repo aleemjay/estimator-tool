@@ -71,12 +71,24 @@ The tool never submits a bid without explicit approval.
 - **Phase 3 — Proposal + send**: branded PDF generation, email delivery,
   BuildingConnected bid submission, approval gate, audit log.
 
+## API connection status (2026-07-10)
+
+- APS app **EpoxyCreations Estimator** created (Traditional Web App,
+  callback `http://localhost:8787/callback`); credentials in gitignored
+  `.env`.
+- `node connect.js` completes 3-legged OAuth and saves/refreshes
+  `tokens.json`. `GET /users/me` returns 200 — auth and app config verified.
+- **Blocker:** Bid Board endpoints (`GET /opportunities`) return
+  `403 BB_PRO_SUBSCRIPTION_REQUIRED`. The limited trial shows
+  `hasBbPro: true` in the product but API access requires **paid** Bid Board
+  Pro. Until then, intake is manual (Download All on an invite → drop PDFs
+  in a folder).
+
 ## Prerequisites AJ must set up
 
-- [ ] Create an APS app at https://aps.autodesk.com (client ID/secret; add
-      the OAuth callback URL once the server exists)
-- [ ] Decide on Bid Board Pro subscription before the trial ends (API access
-      depends on it)
+- [x] Create an APS app at https://aps.autodesk.com (done — see above)
+- [ ] Bid Board Pro: ask BuildingConnected support about API access on trial
+      / pricing, or subscribe (unblocks automatic intake instantly)
 - [ ] Anthropic API key for the plan-reading agent
 - [ ] Complete the pricing interview (Phase 0)
 - [ ] A sample of 3–5 past quotes (Joist PDFs) to validate the pricing engine
