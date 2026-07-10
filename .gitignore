@@ -2,5 +2,6 @@ node_modules/
 .env
 tokens.json
 downloads/
+data/
 *.log
 .DS_Store
