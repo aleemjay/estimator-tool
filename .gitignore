@@ -1,6 +1,7 @@
 node_modules/
 .env
 tokens.json
+ms-tokens.json
 downloads/
 data/
 *.log

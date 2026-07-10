@@ -84,6 +84,26 @@ The tool never submits a bid without explicit approval.
   Pro. Until then, intake is manual (Download All on an invite → drop PDFs
   in a folder).
 
+## Email intake setup (Outlook / Microsoft 365)
+
+The mailbox for `contact@epoxycreationsfl.com` is on Microsoft 365, so
+intake uses the Microsoft Graph API (basic IMAP auth is disabled on M365).
+One-time registration:
+
+1. Go to https://entra.microsoft.com (sign in as the mailbox account) →
+   **Identity → Applications → App registrations → New registration**.
+2. Name: `EpoxyCreations Estimator`. Supported account types: *Accounts in
+   this organizational directory only*. No redirect URI. Register.
+3. On the app page: **Authentication → Advanced settings → Allow public
+   client flows → Yes** → Save.
+4. **API permissions → Add a permission → Microsoft Graph → Delegated →
+   Mail.Read** → Add.
+5. Copy the **Application (client) ID** (and optionally the Directory
+   (tenant) ID) into `.env` as `MS_CLIENT_ID` / `MS_TENANT_ID`.
+
+Then run `npm run intake:email` — it prints a code and a microsoft.com URL
+for a one-time sign-in; tokens persist in `ms-tokens.json` (gitignored).
+
 ## Prerequisites AJ must set up
 
 - [x] Create an APS app at https://aps.autodesk.com (done — see above)
