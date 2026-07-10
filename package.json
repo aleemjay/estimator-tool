@@ -1,0 +1,11 @@
+{
+  "name": "epoxycreations-estimator",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Bid automation dashboard for EpoxyCreations (BuildingConnected intake, AI takeoff, quoting, proposal delivery)",
+  "engines": { "node": ">=18" },
+  "scripts": {
+    "connect": "node connect.js"
+  }
+}
