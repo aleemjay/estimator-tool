@@ -1,0 +1,202 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>EpoxyCreations Estimator</title>
+<style>
+  :root {
+    --bg: #f6f7f9; --card: #fff; --ink: #1a2233; --muted: #67718a;
+    --line: #e3e7ee; --accent: #d6336c; --accent-ink: #fff;
+    --chip-new: #e7f0ff; --chip-new-ink: #1c5fd4;
+    --chip-quote: #fff4e0; --chip-quote-ink: #a05a00;
+    --chip-sent: #e5f7ec; --chip-sent-ink: #1c7c43;
+    --chip-closed: #eef0f4; --chip-closed-ink: #67718a;
+    --late: #c22040;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; font: 15px/1.45 -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; background: var(--bg); color: var(--ink); }
+  header { display: flex; align-items: baseline; gap: 14px; padding: 18px 26px 10px; }
+  header h1 { font-size: 20px; margin: 0; }
+  header .sub { color: var(--muted); font-size: 13px; }
+  .filters { padding: 0 26px 12px; display: flex; gap: 8px; flex-wrap: wrap; }
+  .filters button { border: 1px solid var(--line); background: var(--card); border-radius: 999px; padding: 5px 14px; font-size: 13px; cursor: pointer; color: var(--muted); }
+  .filters button.on { background: var(--ink); color: #fff; border-color: var(--ink); }
+  main { display: grid; grid-template-columns: minmax(430px, 1fr) minmax(420px, 560px); gap: 18px; padding: 0 26px 30px; align-items: start; }
+  @media (max-width: 980px) { main { grid-template-columns: 1fr; } }
+  .list { display: flex; flex-direction: column; gap: 8px; }
+  .row { background: var(--card); border: 1px solid var(--line); border-radius: 10px; padding: 12px 16px; cursor: pointer; display: grid; grid-template-columns: 1fr auto; gap: 2px 10px; }
+  .row:hover { border-color: #b8c2d6; }
+  .row.sel { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent); }
+  .row .name { font-weight: 600; }
+  .row .meta { color: var(--muted); font-size: 13px; }
+  .row .due { text-align: right; font-size: 13px; color: var(--muted); white-space: nowrap; }
+  .row .due.late { color: var(--late); font-weight: 600; }
+  .chip { justify-self: end; font-size: 12px; padding: 2px 10px; border-radius: 999px; background: var(--chip-new); color: var(--chip-new-ink); }
+  .chip.quote, .chip.takeoff, .chip.approved { background: var(--chip-quote); color: var(--chip-quote-ink); }
+  .chip.sent, .chip.won { background: var(--chip-sent); color: var(--chip-sent-ink); }
+  .chip.lost, .chip.declined, .chip.archived { background: var(--chip-closed); color: var(--chip-closed-ink); }
+  .panel { background: var(--card); border: 1px solid var(--line); border-radius: 12px; padding: 18px 20px; position: sticky; top: 14px; }
+  .panel h2 { margin: 0 0 2px; font-size: 17px; }
+  .panel .client { color: var(--muted); margin-bottom: 12px; }
+  .kv { display: grid; grid-template-columns: 110px 1fr; gap: 4px 10px; font-size: 13.5px; margin-bottom: 12px; }
+  .kv dt { color: var(--muted); } .kv dd { margin: 0; }
+  .panel a { color: #1c5fd4; }
+  .section { border-top: 1px solid var(--line); margin-top: 14px; padding-top: 12px; }
+  .section h3 { margin: 0 0 8px; font-size: 13px; text-transform: uppercase; letter-spacing: .04em; color: var(--muted); }
+  select, input[type=number], textarea { font: inherit; border: 1px solid var(--line); border-radius: 8px; padding: 6px 9px; width: 100%; background: #fff; }
+  textarea { min-height: 60px; resize: vertical; }
+  .qgrid { display: grid; grid-template-columns: 1fr 110px 110px; gap: 8px; margin-bottom: 8px; }
+  .preps { display: flex; flex-wrap: wrap; gap: 6px 14px; font-size: 13.5px; margin-bottom: 8px; }
+  .quote-out { background: #f8f9fb; border: 1px solid var(--line); border-radius: 8px; padding: 10px 12px; font-size: 13.5px; }
+  .quote-out .ln { display: flex; justify-content: space-between; gap: 12px; }
+  .quote-out .total { font-weight: 700; border-top: 1px solid var(--line); margin-top: 6px; padding-top: 6px; display: flex; justify-content: space-between; }
+  .quote-out .note { color: var(--muted); font-size: 12.5px; margin-top: 6px; }
+  .emails { font-size: 13px; max-height: 180px; overflow-y: auto; }
+  .emails .em { display: flex; gap: 8px; padding: 3px 0; color: var(--muted); }
+  .emails .kind { flex: none; width: 76px; font-weight: 600; }
+  .btnrow { display: flex; gap: 8px; margin-top: 10px; align-items: center; }
+  button.primary { background: var(--accent); color: var(--accent-ink); border: 0; border-radius: 8px; padding: 8px 16px; font: inherit; font-weight: 600; cursor: pointer; }
+  .saved { color: #1c7c43; font-size: 13px; }
+  .empty { color: var(--muted); padding: 40px; text-align: center; }
+</style>
+</head>
+<body>
+<header>
+  <h1>EpoxyCreations Estimator</h1>
+  <span class="sub" id="counts"></span>
+</header>
+<div class="filters" id="filters"></div>
+<main>
+  <div class="list" id="list"></div>
+  <div class="panel" id="panel"><div class="empty">Select a bid</div></div>
+</main>
+<script>
+const STATUSES = ['new','takeoff','quote','approved','sent','won','lost','declined','archived'];
+const FILTERS = ['active','new','quote','sent','closed','all'];
+let bids = {}, rules = {}, selKey = null, filter = 'active';
+
+const $ = s => document.querySelector(s);
+const esc = s => (s ?? '').replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+const dueDate = b => { const d = new Date(b.due ?? ''); return isNaN(d) ? null : d; };
+const money = n => '$' + Number(n).toLocaleString(undefined, {minimumFractionDigits: n % 1 ? 2 : 0});
+const isClosed = s => ['won','lost','declined','archived'].includes(s);
+
+function visible() {
+  return Object.entries(bids).filter(([, b]) => {
+    if (filter === 'all') return true;
+    if (filter === 'closed') return isClosed(b.status);
+    if (filter === 'active') return !isClosed(b.status);
+    if (filter === 'new') return b.status === 'new' || b.status === 'takeoff';
+    if (filter === 'quote') return b.status === 'quote' || b.status === 'approved';
+    if (filter === 'sent') return b.status === 'sent';
+  }).sort((a, b) => (dueDate(a[1]) ?? new Date('2100-01-01')) - (dueDate(b[1]) ?? new Date('2100-01-01')));
+}
+
+function renderFilters() {
+  $('#filters').innerHTML = FILTERS.map(f =>
+    `<button class="${f === filter ? 'on' : ''}" onclick="filter='${f}';render()">${f}</button>`).join('');
+}
+
+function renderList() {
+  const rows = visible();
+  const now = new Date();
+  $('#counts').textContent = `${rows.length} bid${rows.length === 1 ? '' : 's'}`;
+  $('#list').innerHTML = rows.length ? rows.map(([k, b]) => {
+    const d = dueDate(b);
+    const late = d && d < now && !isClosed(b.status);
+    return `<div class="row ${k === selKey ? 'sel' : ''}" onclick="select('${esc(k)}')">
+      <div class="name">${esc(b.project)}</div>
+      <div class="due ${late ? 'late' : ''}">${d ? 'due ' + d.toLocaleDateString() : ''}</div>
+      <div class="meta">${esc(b.client ?? 'GC unknown')}${b.trade ? ' · ' + esc(b.trade) : ''} · ${b.emails?.length ?? 0} email${(b.emails?.length ?? 0) === 1 ? '' : 's'}</div>
+      <div class="chip ${esc(b.status)}">${esc(b.status)}</div>
+    </div>`;
+  }).join('') : '<div class="empty">Nothing here</div>';
+}
+
+function renderPanel() {
+  const b = bids[selKey];
+  if (!b) { $('#panel').innerHTML = '<div class="empty">Select a bid</div>'; return; }
+  const t = b.takeoff ?? {};
+  $('#panel').innerHTML = `
+    <h2>${esc(b.project)}</h2>
+    <div class="client">${esc(b.client ?? 'GC unknown')}${b.lead ? ' — ' + esc(b.lead) : ''}</div>
+    <dl class="kv">
+      <dt>Status</dt><dd><select id="status" onchange="saveBid()">${STATUSES.map(s => `<option ${s === b.status ? 'selected' : ''}>${s}</option>`).join('')}</select></dd>
+      <dt>Due</dt><dd>${esc(b.due ?? '—')}</dd>
+      <dt>Location</dt><dd>${esc(b.location ?? '—')}</dd>
+      <dt>Contact</dt><dd>${esc(b.contactEmail ?? '—')}${b.contactPhone ? ' · ' + esc(b.contactPhone) : ''}</dd>
+      <dt>Invite</dt><dd>${b.link ? `<a href="${esc(b.link)}" target="_blank">open in BuildingConnected</a>` : '—'}</dd>
+    </dl>
+    <div class="section">
+      <h3>Quote builder</h3>
+      <div class="qgrid">
+        <select id="q-system">${Object.entries(rules.systems).map(([k, v]) => `<option value="${k}" ${t.system === k ? 'selected' : ''}>${esc(v)}</option>`).join('')}</select>
+        <input id="q-sqft" type="number" placeholder="sq ft" value="${t.sqft ?? ''}">
+        <input id="q-cove" type="number" placeholder="cove LF" value="${t.coveLf ?? ''}">
+      </div>
+      <div class="preps">${Object.entries(rules.prep).map(([k, v]) =>
+        `<label><input type="checkbox" name="prep" value="${k}" ${(t.prep ?? []).includes(k) ? 'checked' : ''}> ${esc(v)}</label>`).join('')}</div>
+      <div class="quote-out" id="q-out">Enter a takeoff to price.</div>
+      <div class="section">
+        <h3>Notes</h3>
+        <textarea id="notes" placeholder="Takeoff notes, exclusions, judgment calls...">${esc(b.notes ?? '')}</textarea>
+      </div>
+      <div class="btnrow">
+        <button class="primary" onclick="saveBid()">Save</button>
+        <span class="saved" id="saved"></span>
+      </div>
+    </div>
+    <div class="section">
+      <h3>Emails (${b.emails?.length ?? 0})</h3>
+      <div class="emails">${(b.emails ?? []).slice().reverse().map(e =>
+        `<div class="em"><span class="kind">${esc(e.kind)}</span><span>${esc(e.subject)}</span></div>`).join('')}</div>
+    </div>`;
+  ['q-system', 'q-sqft', 'q-cove'].forEach(id => $('#' + id).addEventListener('input', price));
+  document.querySelectorAll('input[name=prep]').forEach(el => el.addEventListener('change', price));
+  price();
+}
+
+async function price() {
+  const sqft = Number($('#q-sqft').value);
+  if (!sqft) { $('#q-out').textContent = 'Enter a takeoff to price.'; return; }
+  const body = takeoffFromForm();
+  const q = await fetch('/api/quote', { method: 'POST', body: JSON.stringify(body) }).then(r => r.json());
+  if (q.error) { $('#q-out').textContent = q.error; return; }
+  $('#q-out').innerHTML =
+    q.lines.map(l => `<div class="ln"><span>${esc(l.label)}</span><span>${money(l.amount)}</span></div>`).join('') +
+    (q.floored ? `<div class="note">raised to job minimum</div>` : '') +
+    `<div class="total"><span>Total</span><span>${money(q.total)}</span></div>` +
+    `<div class="note">Valid ${q.validityDays} days · ${q.notes.map(esc).join(' ')}</div>`;
+}
+
+function takeoffFromForm() {
+  return {
+    system: $('#q-system').value,
+    sqft: Number($('#q-sqft').value) || 0,
+    coveLf: Number($('#q-cove').value) || 0,
+    prep: [...document.querySelectorAll('input[name=prep]:checked')].map(el => el.value),
+  };
+}
+
+async function saveBid() {
+  const patch = { status: $('#status').value, notes: $('#notes').value, takeoff: takeoffFromForm() };
+  bids[selKey] = await fetch('/api/bids/' + encodeURIComponent(selKey), { method: 'POST', body: JSON.stringify(patch) }).then(r => r.json());
+  $('#saved').textContent = 'saved ✓';
+  setTimeout(() => { const el = $('#saved'); if (el) el.textContent = ''; }, 1500);
+  renderList();
+}
+
+function select(k) { selKey = k; renderList(); renderPanel(); }
+function render() { renderFilters(); renderList(); }
+
+(async () => {
+  [bids, rules] = await Promise.all([
+    fetch('/api/bids').then(r => r.json()),
+    fetch('/api/rules').then(r => r.json()),
+  ]);
+  render();
+})();
+</script>
+</body>
+</html>

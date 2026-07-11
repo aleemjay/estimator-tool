@@ -9,6 +9,7 @@
   },
   "scripts": {
     "connect": "node connect.js",
+    "dashboard": "node server.js",
     "intake:email": "node intake/email.js",
     "intake:browser": "node intake/browser.js"
   },
