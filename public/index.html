@@ -25,8 +25,11 @@
   main { display: grid; grid-template-columns: minmax(430px, 1fr) minmax(420px, 560px); gap: 18px; padding: 0 26px 30px; align-items: start; }
   @media (max-width: 980px) { main { grid-template-columns: 1fr; } }
   .list { display: flex; flex-direction: column; gap: 8px; }
-  .row { background: var(--card); border: 1px solid var(--line); border-radius: 10px; padding: 12px 16px; cursor: pointer; display: grid; grid-template-columns: 1fr auto; gap: 2px 10px; }
+  .row { background: var(--card); border: 1px solid var(--line); border-radius: 10px; padding: 12px 16px; cursor: pointer; display: grid; grid-template-columns: 1fr auto auto; gap: 2px 10px; align-items: start; }
   .row:hover { border-color: #b8c2d6; }
+  .row .close-btn { grid-row: 1 / 3; align-self: center; border: 1px solid var(--line); background: #fff; color: var(--muted); border-radius: 8px; padding: 4px 9px; font-size: 12px; cursor: pointer; visibility: hidden; }
+  .row:hover .close-btn { visibility: visible; }
+  .row .close-btn:hover { color: var(--late); border-color: var(--late); }
   .row.sel { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent); }
   .row .name { font-weight: 600; }
   .row .meta { color: var(--muted); font-size: 13px; }
@@ -104,8 +107,25 @@ function visible() {
 }
 
 function renderFilters() {
+  const overdue = Object.entries(bids).filter(([, b]) => !isClosed(b.status) && dueDate(b) && dueDate(b) < new Date()).length;
   $('#filters').innerHTML = FILTERS.map(f =>
-    `<button class="${f === filter ? 'on' : ''}" onclick="filter='${f}';render()">${f}</button>`).join('');
+    `<button class="${f === filter ? 'on' : ''}" onclick="filter='${f}';render()">${f}</button>`).join('') +
+    (overdue ? `<button style="margin-left:auto;color:var(--late)" onclick="archiveOverdue()">archive ${overdue} overdue</button>` : '');
+}
+
+async function quickClose(ev, key, status) {
+  ev.stopPropagation();
+  bids[key] = await fetch('/api/bids/' + encodeURIComponent(key), { method: 'POST', body: JSON.stringify({ status }) }).then(r => r.json());
+  render();
+}
+
+async function archiveOverdue() {
+  const targets = Object.entries(bids).filter(([, b]) => !isClosed(b.status) && dueDate(b) && dueDate(b) < new Date());
+  if (!confirm(`Archive ${targets.length} bid(s) whose due date has passed?\n\n${targets.map(([, b]) => '• ' + b.project).join('\n')}`)) return;
+  for (const [k] of targets) {
+    bids[k] = await fetch('/api/bids/' + encodeURIComponent(k), { method: 'POST', body: JSON.stringify({ status: 'archived' }) }).then(r => r.json());
+  }
+  render();
 }
 
 function renderList() {
@@ -118,6 +138,7 @@ function renderList() {
     return `<div class="row ${k === selKey ? 'sel' : ''}" onclick="select('${esc(k)}')">
       <div class="name">${esc(b.project)}</div>
       <div class="due ${late ? 'late' : ''}">${d ? 'due ' + d.toLocaleDateString() : ''}</div>
+      ${!isClosed(b.status) ? `<button class="close-btn" title="Decline this bid" onclick="quickClose(event,'${esc(k)}','declined')">✕ decline</button>` : '<span></span>'}
       <div class="meta">${esc(b.client ?? 'GC unknown')}${b.trade ? ' · ' + esc(b.trade) : ''} · ${b.emails?.length ?? 0} email${(b.emails?.length ?? 0) === 1 ? '' : 's'}</div>
       <div class="chip ${esc(b.status)}">${esc(b.status)}</div>
     </div>`;
