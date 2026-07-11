@@ -47,6 +47,28 @@ The tool never submits a bid without explicit approval.
   structured pricing interview to encode them (see
   `pricing/INTERVIEW.md`).
 
+## Using the tool (current state)
+
+```
+npm run intake:email   # pull new BuildingConnected invites from Outlook
+npm run dashboard      # open http://localhost:8788
+```
+
+Per-bid workflow in the dashboard:
+1. **Plans** — download the set from BuildingConnected ("Download All") and
+   drop the PDFs into the folder shown on the bid (data/plans/<id>/).
+2. **Run AI takeoff** — headless Claude reads the plans (uses your Claude
+   Code login, no API key), fills system/sqft/prep, and reports a summary
+   with judgment calls to verify. Takes a few minutes for a big set.
+3. **Review** — adjust the takeoff fields; the quote reprices live.
+4. **Generate proposal PDF** — branded estimate (Joist look, sequential
+   numbering continuing at #419) written to proposals/.
+5. **Send to GC…** — emails the PDF from contact@epoxycreationsfl.com via
+   Microsoft Graph after a confirm dialog. First use requires a one-time
+   device-code sign-in (the UI walks through it). If Microsoft reports a
+   permissions error, add **Mail.Send** (Delegated) to the Entra app the
+   same way Mail.Read was added.
+
 ## Architecture (planned)
 
 - **Web dashboard** (single user): list of open bids with status

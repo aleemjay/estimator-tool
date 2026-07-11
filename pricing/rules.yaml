@@ -143,3 +143,30 @@ proposal_language:
         - Installation of a cove base forming a 4" vertical cove up the wall.
         - Walls are primed to ensure proper adhesion.
         - Cove base mix applied to the wall base at approximately 1/8"-3/16" thickness, troweled to a consistent and compact cove with a clean edge finish.
+    # Templates below drafted to match the Joist voice — AJ to review wording.
+    urethane_cement:
+      title: Urethane Cement Flooring System
+      bullets:
+        - Supply and professional installation of a cementitious urethane flooring system rated for thermal shock, wash-down, and chemical exposure.
+        - "Surface Preparation: mechanical diamond grind / shot blast to the specified concrete surface profile (CSP)."
+        - Self-leveling urethane cement body coat installed at manufacturer-specified thickness.
+        - UV-stable, chemical-resistant topcoat for long-term wear protection.
+    solid_color_epoxy:
+      title: Solid-Color High-Build Epoxy System
+      bullets:
+        - "Surface Preparation: mechanically diamond-grind concrete to a specific Surface Profile (CSP) to ensure maximum adhesion."
+        - "Site Remediation: thorough cleaning and industrial vacuuming of the substrate; repair of minor cracks and voids using a moisture-tolerant epoxy/fiber filler."
+        - Installation of a 100% solids pigmented high-build epoxy body coat.
+        - High-durability clear topcoat for UV resistance and long-term wear protection.
+    polished_concrete:
+      title: Polished Concrete System
+      bullets:
+        - Mechanical grinding, honing, and polishing of the concrete slab to the specified gloss level using progressive diamond tooling.
+        - Application of penetrating densifier to harden the slab surface.
+        - Final stain-guard / sealer application for stain resistance and ease of maintenance.
+    sealed_concrete:
+      title: Sealed Concrete (Densifier / Grind & Seal)
+      bullets:
+        - Thorough cleaning and preparation of the exposed concrete surface.
+        - Repair and patching of minor surface defects as needed.
+        - Application of penetrating cleaner/densifier and protective sealer coats per manufacturer specification for a smooth, dust-proofed, sealed finish.

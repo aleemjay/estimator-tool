@@ -55,10 +55,20 @@
   .emails { font-size: 13px; max-height: 180px; overflow-y: auto; }
   .emails .em { display: flex; gap: 8px; padding: 3px 0; color: var(--muted); }
   .emails .kind { flex: none; width: 76px; font-weight: 600; }
-  .btnrow { display: flex; gap: 8px; margin-top: 10px; align-items: center; }
+  .btnrow { display: flex; gap: 8px; margin-top: 10px; align-items: center; flex-wrap: wrap; }
   button.primary { background: var(--accent); color: var(--accent-ink); border: 0; border-radius: 8px; padding: 8px 16px; font: inherit; font-weight: 600; cursor: pointer; }
+  button.secondary { background: #fff; color: var(--ink); border: 1px solid var(--line); border-radius: 8px; padding: 8px 16px; font: inherit; font-weight: 600; cursor: pointer; }
+  button:disabled { opacity: .5; cursor: default; }
   .saved { color: #1c7c43; font-size: 13px; }
   .empty { color: var(--muted); padding: 40px; text-align: center; }
+  .aibox { background: #f4f0ff; border: 1px solid #ddd2f7; border-radius: 8px; padding: 10px 12px; font-size: 13px; margin-top: 8px; }
+  .aibox .conf { font-weight: 700; text-transform: uppercase; font-size: 11px; letter-spacing: .05em; }
+  .aibox ul { margin: 6px 0 0 18px; padding: 0; }
+  .plans { font-size: 12.5px; color: var(--muted); }
+  .plans code { background: #eef0f4; padding: 1px 5px; border-radius: 4px; font-size: 11.5px; word-break: break-all; }
+  .warn { background: #fff6e5; border: 1px solid #f2dcae; border-radius: 8px; padding: 9px 12px; font-size: 12.5px; margin-top: 8px; }
+  .sendgrid { display: grid; grid-template-columns: 1fr; gap: 6px; margin-top: 8px; }
+  .sendgrid input[type=text] { font: inherit; border: 1px solid var(--line); border-radius: 8px; padding: 6px 9px; width: 100%; }
 </style>
 </head>
 <body>
@@ -148,6 +158,31 @@ function renderPanel() {
       </div>
     </div>
     <div class="section">
+      <h3>Plans &amp; AI takeoff</h3>
+      <div class="plans" id="plans">loading…</div>
+      <div class="btnrow">
+        <button class="secondary" id="btn-takeoff" onclick="runTakeoffUI()">Run AI takeoff</button>
+        <span class="saved" id="takeoff-msg"></span>
+      </div>
+      <div id="aibox">${renderAibox(b)}</div>
+    </div>
+    <div class="section">
+      <h3>Proposal &amp; send</h3>
+      <div class="btnrow">
+        <button class="secondary" onclick="genProposal()">Generate proposal PDF</button>
+        <span id="prop-link">${b.proposalFile ? `<a href="/proposals/${esc(b.proposalFile)}" target="_blank">estimate #${esc(String(b.estimateNo))} (PDF)</a>` : ''}</span>
+      </div>
+      <div class="sendgrid">
+        <input type="text" id="send-to" placeholder="recipient email" value="${esc(b.contactEmail ?? '')}">
+        <input type="text" id="send-subject" value="${esc('Proposal — ' + (b.project ?? '') + ' — Epoxy Creations LLC')}">
+      </div>
+      <div class="btnrow">
+        <button class="primary" onclick="sendToGC()">Send to GC…</button>
+        <span class="saved" id="send-msg">${b.sentAt ? 'sent ' + new Date(b.sentAt).toLocaleDateString() + ' to ' + esc(b.sentTo ?? '') : ''}</span>
+      </div>
+      <div id="send-extra"></div>
+    </div>
+    <div class="section">
       <h3>Emails (${b.emails?.length ?? 0})</h3>
       <div class="emails">${(b.emails ?? []).slice().reverse().map(e =>
         `<div class="em"><span class="kind">${esc(e.kind)}</span><span>${esc(e.subject)}</span></div>`).join('')}</div>
@@ -155,6 +190,96 @@ function renderPanel() {
   ['q-system', 'q-sqft', 'q-cove'].forEach(id => $('#' + id).addEventListener('input', price));
   document.querySelectorAll('input[name=prep]').forEach(el => el.addEventListener('change', price));
   price();
+  loadPlans();
+}
+
+function renderAibox(b) {
+  const a = b.aiTakeoff;
+  if (!a) return '';
+  return `<div class="aibox">
+    <span class="conf">AI takeoff · ${esc(a.confidence)} confidence</span>
+    <div>${esc(a.summary)}</div>
+    ${a.judgmentCalls?.length ? `<div style="margin-top:6px"><b>Verify:</b><ul>${a.judgmentCalls.map(j => `<li>${esc(j)}</li>`).join('')}</ul></div>` : ''}
+    ${a.opportunities?.length ? `<div style="margin-top:6px"><b>Opportunities:</b><ul>${a.opportunities.map(o => `<li>${esc(o)}</li>`).join('')}</ul></div>` : ''}
+  </div>`;
+}
+
+async function loadPlans() {
+  const p = await fetch('/api/bids/' + encodeURIComponent(selKey) + '/plans').then(r => r.json());
+  $('#plans').innerHTML = (p.files.length
+    ? `${p.files.map(esc).join(' · ')}<br>`
+    : 'No plan files yet. Download the set from BuildingConnected and drop the PDFs into:<br>') +
+    `<code>${esc(p.dir)}</code>`;
+  $('#btn-takeoff').disabled = !p.files.length;
+  const s = await fetch('/api/bids/' + encodeURIComponent(selKey) + '/takeoff-status').then(r => r.json());
+  if (s.status === 'running') watchTakeoff();
+}
+
+async function runTakeoffUI() {
+  const r = await fetch('/api/bids/' + encodeURIComponent(selKey) + '/takeoff', { method: 'POST' }).then(r => r.json());
+  if (r.error) { $('#takeoff-msg').textContent = r.error; return; }
+  watchTakeoff();
+}
+
+let takeoffTimer = null;
+function watchTakeoff() {
+  const key = selKey;
+  $('#btn-takeoff').disabled = true;
+  $('#takeoff-msg').textContent = 'reading plans… (a few minutes)';
+  clearInterval(takeoffTimer);
+  takeoffTimer = setInterval(async () => {
+    const s = await fetch('/api/bids/' + encodeURIComponent(key) + '/takeoff-status').then(r => r.json());
+    if (s.status === 'running') return;
+    clearInterval(takeoffTimer);
+    if (key !== selKey) return;
+    if (s.status === 'error') { $('#takeoff-msg').textContent = 'failed: ' + s.error; $('#btn-takeoff').disabled = false; return; }
+    bids = await fetch('/api/bids').then(r => r.json());
+    renderList(); renderPanel();
+  }, 3000);
+}
+
+async function genProposal() {
+  await saveBid();
+  const r = await fetch('/api/bids/' + encodeURIComponent(selKey) + '/proposal', { method: 'POST' }).then(r => r.json());
+  if (r.error) { $('#prop-link').textContent = r.error; return; }
+  bids[selKey].proposalFile = r.file.split('/').pop();
+  bids[selKey].estimateNo = r.estimateNo;
+  $('#prop-link').innerHTML = `<a href="${r.file}" target="_blank">estimate #${r.estimateNo} (PDF)</a> — ${money(r.total)}`;
+}
+
+async function sendToGC() {
+  const to = $('#send-to').value.trim();
+  const subject = $('#send-subject').value.trim();
+  const b = bids[selKey];
+  if (!b.proposalFile) { $('#send-msg').textContent = 'generate the proposal first'; return; }
+  if (!to) { $('#send-msg').textContent = 'enter a recipient'; return; }
+  if (!confirm(`Send estimate #${b.estimateNo} for "${b.project}" to ${to}?\n\nThis emails the proposal PDF from your account.`)) return;
+  $('#send-msg').textContent = 'sending…';
+  const body = `Hello,\n\nPlease find attached our proposal (estimate #${b.estimateNo}) for ${b.project}.\n\nThank you,\nAleem Javed\nEpoxy Creations LLC\n(321) 328-0030`;
+  const r = await fetch('/api/bids/' + encodeURIComponent(selKey) + '/send', { method: 'POST', body: JSON.stringify({ to, subject, body }) });
+  const out = await r.json();
+  if (out.sent) { $('#send-msg').textContent = 'sent ✓'; bids[selKey].status = 'sent'; renderList(); return; }
+  if (out.code === 'NO_AUTH') return sendAuthFlow();
+  if (out.code === 'NO_PERMISSION') {
+    $('#send-extra').innerHTML = `<div class="warn"><b>One-time setup needed:</b> the Entra app is missing the <b>Mail.Send</b> permission. In entra.microsoft.com open App registrations → EpoxyCreations Estimator → API permissions → Add a permission → Microsoft Graph → Delegated → <b>Mail.Send</b> → Add. Then click Send again.</div>`;
+    $('#send-msg').textContent = '';
+    return;
+  }
+  $('#send-msg').textContent = out.error ?? 'failed';
+}
+
+async function sendAuthFlow() {
+  $('#send-msg').textContent = '';
+  const dc = await fetch('/api/send-auth/start', { method: 'POST' }).then(r => r.json());
+  if (dc.error) { $('#send-msg').textContent = dc.error; return; }
+  $('#send-extra').innerHTML = `<div class="warn"><b>One-time sign-in for sending:</b> open <a href="${esc(dc.url)}" target="_blank">${esc(dc.url)}</a> and enter code <b style="font-size:15px">${esc(dc.userCode)}</b>, then approve. Waiting…</div>`;
+  const timer = setInterval(async () => {
+    const s = await fetch('/api/send-auth/poll', { method: 'POST', body: JSON.stringify({ deviceCode: dc.deviceCode }) }).then(r => r.json());
+    if (s.status === 'pending') return;
+    clearInterval(timer);
+    if (s.status === 'done') { $('#send-extra').innerHTML = ''; $('#send-msg').textContent = 'signed in — click Send again'; }
+    else $('#send-extra').innerHTML = `<div class="warn">Sign-in failed: ${esc(s.error ?? '')}</div>`;
+  }, 4000);
 }
 
 async function price() {

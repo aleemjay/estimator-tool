@@ -6,3 +6,5 @@ downloads/
 data/
 *.log
 .DS_Store
+proposals/
+ms-tokens-send.json
