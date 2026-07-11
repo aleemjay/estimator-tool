@@ -3,6 +3,7 @@
 // and the pricing engine. Usage: npm run dashboard  (http://localhost:8788)
 
 import { createServer } from 'node:http';
+import { spawn } from 'node:child_process';
 import { readFileSync, writeFileSync, existsSync, mkdirSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, join, basename } from 'node:path';
@@ -18,6 +19,31 @@ const BIDS = join(ROOT, 'data/bids.json');
 const PLANS = join(ROOT, 'data/plans');
 const RULES = parse(readFileSync(join(ROOT, 'pricing/rules.yaml'), 'utf8'));
 const takeoffRuns = new Map(); // bidKey -> {status:'running'|'done'|'error', error?}
+const fetchRuns = new Map(); // bidKey -> same shape
+
+function startTakeoffRun(key) {
+  const bids = loadBids();
+  const { dir, files } = listPlans(PLANS, key);
+  if (!files.length || takeoffRuns.get(key)?.status === 'running') return false;
+  takeoffRuns.set(key, { status: 'running', startedAt: Date.now() });
+  runTakeoff(bids[key], dir)
+    .then(result => {
+      const fresh = loadBids();
+      fresh[key].aiTakeoff = result;
+      if (result.system) {
+        fresh[key].takeoff = { system: result.system, sqft: result.sqft, coveLf: result.coveLf, prep: result.prep };
+        const q = computeQuote({ system: result.system, sqft: result.sqft, coveLf: result.coveLf, prep: result.prep });
+        fresh[key].quote = { total: q.total, draftedAt: new Date().toISOString() };
+        if (fresh[key].status === 'new' || fresh[key].status === 'takeoff') fresh[key].status = 'quote';
+      } else if (fresh[key].status === 'new') {
+        fresh[key].status = 'takeoff';
+      }
+      saveBids(fresh);
+      takeoffRuns.set(key, { status: 'done' });
+    })
+    .catch(e => takeoffRuns.set(key, { status: 'error', error: e.message }));
+  return true;
+}
 
 const loadBids = () => (existsSync(BIDS) ? JSON.parse(readFileSync(BIDS, 'utf8')) : {});
 const saveBids = b => writeFileSync(BIDS, JSON.stringify(b, null, 2));
@@ -72,7 +98,7 @@ createServer(async (req, res) => {
     }
 
     // --- plans + AI takeoff ---
-    const takeoffMatch = url.pathname.match(/^\/api\/bids\/([^/]+)\/(plans|takeoff|takeoff-status)$/);
+    const takeoffMatch = url.pathname.match(/^\/api\/bids\/([^/]+)\/(plans|takeoff|takeoff-status|fetch-plans|fetch-status)$/);
     if (takeoffMatch) {
       const key = decodeURIComponent(takeoffMatch[1]);
       const action = takeoffMatch[2];
@@ -87,23 +113,34 @@ createServer(async (req, res) => {
       if (action === 'takeoff-status') {
         return json(res, 200, takeoffRuns.get(key) ?? { status: 'idle' });
       }
+      if (action === 'fetch-status') {
+        return json(res, 200, fetchRuns.get(key) ?? { status: 'idle' });
+      }
       if (action === 'takeoff' && req.method === 'POST') {
         const { dir, files } = listPlans(PLANS, key);
         if (!files.length) return json(res, 400, { error: `No plan files. Drop PDFs into: ${dir}` });
-        if (takeoffRuns.get(key)?.status === 'running') return json(res, 409, { error: 'takeoff already running' });
-        takeoffRuns.set(key, { status: 'running', startedAt: Date.now() });
-        runTakeoff(bids[key], dir)
-          .then(result => {
-            const fresh = loadBids();
-            fresh[key].aiTakeoff = result;
-            if (result.system) {
-              fresh[key].takeoff = { system: result.system, sqft: result.sqft, coveLf: result.coveLf, prep: result.prep };
-            }
-            if (fresh[key].status === 'new') fresh[key].status = 'takeoff';
-            saveBids(fresh);
-            takeoffRuns.set(key, { status: 'done' });
-          })
-          .catch(e => takeoffRuns.set(key, { status: 'error', error: e.message }));
+        if (!startTakeoffRun(key)) return json(res, 409, { error: 'takeoff already running' });
+        return json(res, 202, { status: 'running' });
+      }
+      if (action === 'fetch-plans' && req.method === 'POST') {
+        if (fetchRuns.get(key)?.status === 'running') return json(res, 409, { error: 'fetch already running' });
+        if (!bids[key].rfpId && !bids[key].link) return json(res, 400, { error: 'bid has no BuildingConnected link' });
+        fetchRuns.set(key, { status: 'running', startedAt: Date.now() });
+        let out = '';
+        const child = spawn('node', ['intake/browser.js', '--key', key], { cwd: ROOT });
+        child.stdout.on('data', d => (out += d));
+        child.stderr.on('data', d => (out += d));
+        child.on('exit', () => {
+          const { files } = listPlans(PLANS, key);
+          if (files.length) {
+            fetchRuns.set(key, { status: 'done' });
+            startTakeoffRun(key); // chain: plans -> takeoff -> quote, fully automatic
+          } else {
+            const lines = out.split('\n').map(s => s.trim()).filter(Boolean);
+            const meaningful = lines.find(l => /LOGIN_TIMEOUT|FAILED|Error|Timeout/i.test(l)) ?? lines.pop() ?? 'no files downloaded';
+            fetchRuns.set(key, { status: 'error', error: meaningful.slice(0, 250) });
+          }
+        });
         return json(res, 202, { status: 'running' });
       }
     }

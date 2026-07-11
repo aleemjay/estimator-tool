@@ -16,6 +16,7 @@ export function listPlans(plansRoot, key) {
 }
 
 const SCHEMA = `{
+  "executive_summary": "<2-4 sentences for the business owner: what the building/project is and where, who the GC is, the overall construction scope, any schedule/bid requirements stated, and where our trade fits in the job>",
   "system": "<one of: epoxy_flake | quartz | urethane_cement | solid_color_epoxy | polished_concrete | sealed_concrete | none>",
   "sqft": <number, total sq ft of OUR scope (resinous/sealed/polished concrete flooring); 0 if none>,
   "coveLf": <number, linear feet of integral cove base in our scope, 0 if none/unknown>,
@@ -67,6 +68,7 @@ export function runTakeoff(bid, plansDir, { timeoutMs = 15 * 60 * 1000 } = {}) {
           if (start < 0 || end < 0) return reject(new Error(`takeoff agent returned no JSON: ${text.slice(0, 300)}`));
           const parsed = JSON.parse(text.slice(start, end + 1));
           resolve({
+            execSummary: parsed.executive_summary ?? '',
             system: parsed.system === 'none' ? null : parsed.system,
             sqft: Number(parsed.sqft) || 0,
             coveLf: Number(parsed.coveLf) || 0,

@@ -54,7 +54,13 @@ async function ensureLoggedIn() {
   if (page.url().includes('/login')) {
     console.log('\n>>> Not signed in. Log in to BuildingConnected in the window (one time).');
     console.log('>>> Waiting up to 5 minutes...\n');
-    await page.waitForURL(u => !String(u).includes('/login'), { timeout: 5 * 60 * 1000 });
+    try {
+      await page.waitForURL(u => !String(u).includes('/login'), { timeout: 5 * 60 * 1000 });
+    } catch {
+      console.log('LOGIN_TIMEOUT: BuildingConnected sign-in was not completed in the browser window. Click "Fetch plans" again when you are ready to sign in.');
+      await ctx.close();
+      process.exit(1);
+    }
     console.log('Signed in.');
   }
 }

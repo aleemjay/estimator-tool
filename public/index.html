@@ -182,6 +182,7 @@ function renderPanel() {
       <h3>Plans &amp; AI takeoff</h3>
       <div class="plans" id="plans">loading…</div>
       <div class="btnrow">
+        <button class="secondary" id="btn-fetch" onclick="fetchPlansUI()">Fetch plans + auto-takeoff</button>
         <button class="secondary" id="btn-takeoff" onclick="runTakeoffUI()">Run AI takeoff</button>
         <span class="saved" id="takeoff-msg"></span>
       </div>
@@ -219,7 +220,8 @@ function renderAibox(b) {
   if (!a) return '';
   return `<div class="aibox">
     <span class="conf">AI takeoff · ${esc(a.confidence)} confidence</span>
-    <div>${esc(a.summary)}</div>
+    ${a.execSummary ? `<div style="margin:4px 0 8px"><b>The job:</b> ${esc(a.execSummary)}</div>` : ''}
+    <div><b>Our scope:</b> ${esc(a.summary)}</div>
     ${a.judgmentCalls?.length ? `<div style="margin-top:6px"><b>Verify:</b><ul>${a.judgmentCalls.map(j => `<li>${esc(j)}</li>`).join('')}</ul></div>` : ''}
     ${a.opportunities?.length ? `<div style="margin-top:6px"><b>Opportunities:</b><ul>${a.opportunities.map(o => `<li>${esc(o)}</li>`).join('')}</ul></div>` : ''}
   </div>`;
@@ -227,13 +229,42 @@ function renderAibox(b) {
 
 async function loadPlans() {
   const p = await fetch('/api/bids/' + encodeURIComponent(selKey) + '/plans').then(r => r.json());
-  $('#plans').innerHTML = (p.files.length
-    ? `${p.files.map(esc).join(' · ')}<br>`
-    : 'No plan files yet. Download the set from BuildingConnected and drop the PDFs into:<br>') +
-    `<code>${esc(p.dir)}</code>`;
+  const b = bids[selKey];
+  $('#plans').innerHTML = p.files.length
+    ? `${p.files.map(esc).join(' · ')}`
+    : `No plan files yet.${b.rfpId || b.link ? ' Click <b>Fetch plans</b> to pull them from BuildingConnected automatically.' : ''}<br>Manual drop folder: <code>${esc(p.dir)}</code>`;
   $('#btn-takeoff').disabled = !p.files.length;
-  const s = await fetch('/api/bids/' + encodeURIComponent(selKey) + '/takeoff-status').then(r => r.json());
-  if (s.status === 'running') watchTakeoff();
+  $('#btn-fetch').disabled = !!p.files.length || !(b.rfpId || b.link);
+  const [s, f] = await Promise.all([
+    fetch('/api/bids/' + encodeURIComponent(selKey) + '/takeoff-status').then(r => r.json()),
+    fetch('/api/bids/' + encodeURIComponent(selKey) + '/fetch-status').then(r => r.json()),
+  ]);
+  if (f.status === 'running') watchFetch();
+  else if (s.status === 'running') watchTakeoff();
+}
+
+async function fetchPlansUI() {
+  const r = await fetch('/api/bids/' + encodeURIComponent(selKey) + '/fetch-plans', { method: 'POST' }).then(r => r.json());
+  if (r.error) { $('#takeoff-msg').textContent = r.error; return; }
+  watchFetch();
+}
+
+let fetchTimer = null;
+function watchFetch() {
+  const key = selKey;
+  $('#btn-fetch').disabled = true;
+  $('#btn-takeoff').disabled = true;
+  $('#takeoff-msg').textContent = 'downloading plans from BuildingConnected… (if a browser window opens asking to log in, sign in once)';
+  clearInterval(fetchTimer);
+  fetchTimer = setInterval(async () => {
+    const f = await fetch('/api/bids/' + encodeURIComponent(key) + '/fetch-status').then(r => r.json());
+    if (f.status === 'running') return;
+    clearInterval(fetchTimer);
+    if (key !== selKey) return;
+    if (f.status === 'error') { $('#takeoff-msg').textContent = 'plan fetch failed: ' + f.error; $('#btn-fetch').disabled = false; return; }
+    // fetch done — the server chains straight into the AI takeoff
+    watchTakeoff();
+  }, 3000);
 }
 
 async function runTakeoffUI() {
