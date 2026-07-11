@@ -11,5 +11,8 @@
     "connect": "node connect.js",
     "intake:email": "node intake/email.js",
     "intake:browser": "node intake/browser.js"
+  },
+  "dependencies": {
+    "yaml": "^2.9.0"
   }
 }

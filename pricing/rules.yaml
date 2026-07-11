@@ -1,0 +1,115 @@
+# EpoxyCreations pricing rules — encoded from AJ's pricing interview (July 2026).
+# Status: DRAFT — sections marked TODO are not yet interviewed/confirmed.
+# All rates USD. sqft tiers are "min sqft of the job → rate per sqft".
+
+systems:
+  epoxy_flake:
+    label: Decorative Flake
+    unit: sqft
+    tiers:
+      - { min: 0, rate: 5.00 }
+      - { min: 1000, rate: 4.00 }
+      - { min: 5000, rate: 3.50 }
+  quartz:
+    label: Decorative Quartz (double broadcast)
+    unit: sqft
+    tiers:
+      - { min: 0, rate: 12.00 }
+      - { min: 2500, rate: 10.00 }
+      - { min: 7500, rate: 8.50 }
+  urethane_cement:
+    label: Urethane Cement (kitchens / wet areas)
+    unit: sqft
+    tiers:
+      - { min: 0, rate: 12.00 }
+      - { min: 2500, rate: 10.50 }
+      - { min: 7500, rate: 9.00 }
+  solid_color_epoxy:
+    label: Solid-Color Epoxy (High-Build)
+    unit: sqft
+    tiers:
+      - { min: 0, rate: 6.00 }
+      - { min: 2500, rate: 5.00 }
+      - { min: 7500, rate: 4.25 }
+  polished_concrete:
+    label: Polished Concrete
+    unit: sqft
+    tiers:
+      - { min: 0, rate: 5.00 }
+      - { min: 2500, rate: 4.25 }
+      - { min: 7500, rate: 3.50 }
+  sealed_concrete:
+    label: Sealed Concrete (Densifier / Grind & Seal)
+    unit: sqft
+    tiers:
+      - { min: 0, rate: 2.00 }
+      - { min: 2500, rate: 1.65 }
+      - { min: 7500, rate: 1.35 }
+
+line_items:
+  cove_base:
+    label: Integral Cove Base (4" or 6")
+    unit: lf
+    tiers:
+      - { min: 0, rate: 20.00 }
+      # Over 1,000 LF can scale to 16.00–18.00 with pre-form / efficient
+      # trowel crew — draft at 18.00, AJ adjusts per job.
+      - { min: 1000, rate: 18.00 }
+
+prep:
+  standard_diamond_grind:
+    label: Standard Diamond Grind
+    billing: included_in_base
+    rate: 0.00
+  heavy_corrective_grinding:
+    label: Heavy / Corrective Grinding
+    billing: separate_line_item
+    unit: sqft
+    rate_range: [0.75, 1.25]
+    draft_rate: 1.00
+  shot_blasting:
+    label: Shot Blasting (CSP 3-5)
+    billing: separate_line_item # standalone or upgrade adder
+    unit: sqft
+    rate_range: [1.50, 2.25]
+    draft_rate: 1.85
+  moisture_vapor_barrier:
+    label: Moisture Vapor Barrier
+    billing: excluded_by_default
+    unit: sqft
+    rate_range: [3.50, 4.50]
+    draft_rate: 4.00
+    proposal_note: >
+      Moisture vapor barrier is excluded. If concrete RH/calcium-chloride
+      testing exceeds the coating manufacturer's limits, MVB will be added
+      at the quoted adder rate.
+  coating_glue_removal:
+    label: Thick Coating / Glue Removal
+    billing: separate_line_item
+    unit: sqft
+    rate_range: [1.50, 3.00]
+    draft_rate: 2.00
+  crack_joint_repair:
+    label: Crack & Joint Repair
+    billing: allowance_plus_overage
+    unit: lf
+    overage_rate: 5.00
+    # TODO: typical allowance included in base bid (dollar amount or LF)?
+
+# TODO(round 1 remnant): fluid-applied flooring scope (Solid Waste Fleet
+#   Shop) — quote as urethane_cement, or its own system? Any systems to
+#   auto-decline.
+job_rules:
+  minimum_contract: 1000.00 # base contract rounds UP to this floor
+  travel_mobilization: 0.00 # absorbed into base rates — no distance bands
+  extra_mobilizations: 0.00 # phased schedules: no penalty fee
+  night_weekend_uplift: 0.00 # off-hours quoted same as daytime
+  gc_adjustments: none # same numbers for every GC — no premiums/discounts
+
+presentation:
+  round_total_to_nearest: 500
+  quote_validity_days: 60
+  warranty: omit # never mention warranty on proposals
+  # TODO: payment terms — AJ undecided; leave off proposals until set.
+  # TODO: standard exclusions list — extract from AJ's sample Joist quotes
+  #   when provided (moisture vapor barrier note already covered in prep).
