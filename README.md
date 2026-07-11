@@ -50,8 +50,22 @@ The tool never submits a bid without explicit approval.
 ## Using the tool (current state)
 
 ```
-npm run intake:email   # pull new BuildingConnected invites from Outlook
-npm run dashboard      # open http://localhost:8788
+npm run pipeline       # the whole thing: intake → plans → AI takeoff → draft quotes
+npm run dashboard      # open http://localhost:8788 to approve / tweak / send
+```
+
+`npm run pipeline` pulls new invites from Outlook, opens a browser to
+download each new bid's plan files from BuildingConnected (first run:
+sign in once in the window that opens; the session is remembered), runs
+the AI takeoff on each new plan set, prices it, and leaves every bid in
+the dashboard at status "quote" — ready to approve, tweak, or send.
+`--no-browser` skips the plan-download step.
+
+Individual steps, if needed:
+
+```
+npm run intake:email     # just pull new invites
+npm run intake:browser   # just fetch missing plan files
 ```
 
 Per-bid workflow in the dashboard:

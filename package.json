@@ -10,11 +10,13 @@
   "scripts": {
     "connect": "node connect.js",
     "dashboard": "node server.js",
+    "pipeline": "node pipeline.js",
     "intake:email": "node intake/email.js",
     "intake:browser": "node intake/browser.js"
   },
   "dependencies": {
     "pdfkit": "^0.19.1",
+    "playwright": "^1.61.1",
     "yaml": "^2.9.0"
   }
 }
