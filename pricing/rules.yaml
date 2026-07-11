@@ -94,11 +94,12 @@ prep:
     billing: allowance_plus_overage
     unit: lf
     overage_rate: 5.00
-    # TODO: typical allowance included in base bid (dollar amount or LF)?
+    allowance: per_job # AJ sets the included allowance job-by-job
 
-# TODO(round 1 remnant): fluid-applied flooring scope (Solid Waste Fleet
-#   Shop) — quote as urethane_cement, or its own system? Any systems to
-#   auto-decline.
+aliases:
+  # Invite trades map onto systems; "fluid-applied flooring" prices as
+  # urethane cement (confirmed by AJ).
+  fluid_applied_flooring: urethane_cement
 job_rules:
   minimum_contract: 1000.00 # base contract rounds UP to this floor
   travel_mobilization: 0.00 # absorbed into base rates — no distance bands
@@ -110,6 +111,35 @@ presentation:
   round_total_to_nearest: 500
   quote_validity_days: 60
   warranty: omit # never mention warranty on proposals
-  # TODO: payment terms — AJ undecided; leave off proposals until set.
-  # TODO: standard exclusions list — extract from AJ's sample Joist quotes
-  #   when provided (moisture vapor barrier note already covered in prep).
+  payment_terms: flexible # negotiated with each contractor; no rigid terms on proposals
+  deposit: 500.00 # typical on small/residential direct work (Joist #417); GC bids usually none
+
+# Proposal boilerplate — extracted from real Joist estimates #417 and #418.
+proposal_language:
+  site_measure_note: >
+    This quotation is based on client-provided dimensions. Final project
+    totals are subject to adjustment should on-site measurements reveal a
+    larger service area than initially estimated.
+  scope_templates:
+    epoxy_flake:
+      title: Hybrid Full Flake Flooring System
+      bullets:
+        - Premium multi-layer coating application including surface preparation, base coat, decorative broadcast, and high-performance topcoat.
+        - "Surface Preparation: Mechanically diamond-grind concrete to a specific Surface Profile (CSP) to ensure maximum adhesion."
+        - "Site Remediation: Thorough cleaning and industrial vacuuming of the substrate; repair of minor cracks and voids using a moisture-tolerant epoxy/fiber filler."
+        - "Base Coat Application: Installation of a 100% solids, 10lb moisture-mitigating pigmented epoxy barrier."
+        - "Decorative Broadcast: Full-distribution (to rejection) of 1/4\" decorative vinyl flakes."
+        - "Topcoat Protection: Application of a high-durability Polyaspartic clear topcoat for UV resistance and long-term wear protection."
+    quartz:
+      title: Blended Quartz System
+      bullets:
+        - Supply and professional installation of a LATICRETE SPARTACOTE BLENDED QUARTZ or similar Flooring System.
+        - "Epoxy 1150FC base: a self-leveling epoxy base layer, pigmented and broadcast to rejection with colored quartz."
+        - "Polyaspartic HS Slow Cure: a UV-stable, clear topcoat for added durability and chemical resistance."
+        - "Surface Preparation: concrete preparation to CSP 3-5; crack repair and patching as needed."
+    cove_base:
+      title: 4" Cove Base
+      bullets:
+        - Installation of a cove base forming a 4" vertical cove up the wall.
+        - Walls are primed to ensure proper adhesion.
+        - Cove base mix applied to the wall base at approximately 1/8"-3/16" thickness, troweled to a consistent and compact cove with a clean edge finish.
