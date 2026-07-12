@@ -93,8 +93,8 @@ createServer(async (req, res) => {
       return json(res, 200, bids[key]);
     }
     if (url.pathname === '/api/quote' && req.method === 'POST') {
-      const { system, sqft, coveLf, prep } = await readBody(req);
-      return json(res, 200, computeQuote({ system, sqft: Number(sqft) || 0, coveLf: Number(coveLf) || 0, prep: prep ?? [] }));
+      const { system, sqft, coveLf, prep, rateOverride } = await readBody(req);
+      return json(res, 200, computeQuote({ system, sqft: Number(sqft) || 0, coveLf: Number(coveLf) || 0, prep: prep ?? [], rateOverride: Number(rateOverride) || null }));
     }
 
     // --- plans + AI takeoff ---
@@ -154,7 +154,7 @@ createServer(async (req, res) => {
       if (!bid) return json(res, 404, { error: 'unknown bid' });
       const t = bid.takeoff;
       if (!t?.system || !t?.sqft) return json(res, 400, { error: 'save a takeoff (system + sqft) first' });
-      const quote = computeQuote({ system: t.system, sqft: t.sqft, coveLf: t.coveLf ?? 0, prep: t.prep ?? [] });
+      const quote = computeQuote({ system: t.system, sqft: t.sqft, coveLf: t.coveLf ?? 0, prep: t.prep ?? [], rateOverride: t.rateOverride ?? null });
       const estimateNo = bid.estimateNo ?? nextEstimateNumber();
       const file = generateProposal(bid, quote, t, estimateNo);
       bid.estimateNo = estimateNo;

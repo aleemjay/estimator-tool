@@ -16,16 +16,18 @@ export function listPlans(plansRoot, key) {
 }
 
 const SCHEMA = `{
-  "executive_summary": "<2-4 sentences for the business owner: what the building/project is and where, who the GC is, the overall construction scope, any schedule/bid requirements stated, and where our trade fits in the job>",
+  "executive_summary": "<MAX 2 short sentences: building type + city, GC, what the overall project is. Telegraphic, no filler.>",
+  "scope": "<ONE terse line, our scope only. Format: '<system> ~<SF> SF (<rooms/finish codes>)' — join multiple systems with ' + '. Example: 'Sealed concrete ~1,596 SF (7 rooms, FC-2) + slip-resistant epoxy 497 SF (chem storage 109)'>",
+  "not_our_scope": "<ONE terse line of what in this bid is NOT our trade. Example: 'LVT in exam/treatment rooms (flooring sub), rubber base, paint'>",
   "system": "<one of: epoxy_flake | quartz | urethane_cement | solid_color_epoxy | polished_concrete | sealed_concrete | none>",
   "sqft": <number, total sq ft of OUR scope (resinous/sealed/polished concrete flooring); 0 if none>,
   "coveLf": <number, linear feet of integral cove base in our scope, 0 if none/unknown>,
   "prep": [<any of: "heavy_corrective_grinding", "shot_blasting", "coating_glue_removal" — ONLY if the documents put that work in the flooring contractor's scope, not the GC/demo contractor's>],
   "confidence": "<high|medium|low>",
-  "summary": "<3-6 sentences: what the project is, what our actual scope is (rooms, finish codes, spec products), what is NOT our trade, and how you derived the sq ft>",
-  "judgment_calls": [<strings: each thing a human must verify — scope boundaries, area measurements you could not confirm, ambiguous spec language, work that might be by others>],
-  "opportunities": [<strings: adjacent scope we could also bid, e.g. epoxy/resinous WALL systems, joint fill, additional rooms specced for coatings>]
-}`;
+  "judgment_calls": [<strings, MAX 12 words each, imperative: things a human must verify before bidding. Example: 'Confirm FC-2/FC-5 split in rooms 111 & 114 (no dimensions)'>],
+  "opportunities": [<strings, MAX 12 words each: adjacent scope we could also bid>]
+}
+Style: telegraphic and specific. Sheet/room/spec references allowed. No sentences explaining your method, no hedging language, no repetition.`;
 
 function buildPrompt(bid) {
   return `You are a construction estimator for EpoxyCreations LLC, a commercial epoxy/resinous flooring and polished/sealed concrete subcontractor in Florida. Analyze the construction documents (PDFs) in the current directory for this bid invitation and produce a quantity takeoff of OUR trade scope only.
@@ -69,6 +71,9 @@ export function runTakeoff(bid, plansDir, { timeoutMs = 15 * 60 * 1000 } = {}) {
           const parsed = JSON.parse(text.slice(start, end + 1));
           resolve({
             execSummary: parsed.executive_summary ?? '',
+            scope: parsed.scope ?? '',
+            notScope: parsed.not_our_scope ?? '',
+            summary: parsed.summary ?? undefined, // legacy field, absent in new runs
             system: parsed.system === 'none' ? null : parsed.system,
             sqft: Number(parsed.sqft) || 0,
             coveLf: Number(parsed.coveLf) || 0,

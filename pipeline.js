@@ -72,7 +72,7 @@ step('4/4 Draft quotes');
     const t = b.takeoff;
     if (!t?.system || !t?.sqft) continue;
     if (!b.quote) {
-      const q = computeQuote({ system: t.system, sqft: t.sqft, coveLf: t.coveLf ?? 0, prep: t.prep ?? [] });
+      const q = computeQuote({ system: t.system, sqft: t.sqft, coveLf: t.coveLf ?? 0, prep: t.prep ?? [], rateOverride: t.rateOverride ?? null });
       b.quote = { total: q.total, draftedAt: new Date().toISOString() };
       drafted++;
     }

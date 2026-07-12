@@ -19,12 +19,12 @@ function tierRate(tiers, qty) {
   return rate;
 }
 
-export function computeQuote({ system, sqft, coveLf = 0, prep = [] }) {
+export function computeQuote({ system, sqft, coveLf = 0, prep = [], rateOverride = null }) {
   const sys = RULES.systems[system];
   if (!sys) throw new Error(`Unknown system "${system}". Options: ${Object.keys(RULES.systems).join(', ')}`);
 
   const lines = [];
-  const rate = tierRate(sys.tiers, sqft);
+  const rate = rateOverride > 0 ? rateOverride : tierRate(sys.tiers, sqft);
   lines.push({ label: `${sys.label} — ${sqft.toLocaleString()} sq ft @ $${rate.toFixed(2)}`, amount: sqft * rate, kind: 'system', key: system });
 
   if (coveLf > 0) {
