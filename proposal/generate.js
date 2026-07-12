@@ -57,66 +57,77 @@ export function generateProposal(bid, quote, takeoff, estimateNo) {
 
   y = yl + 24;
   doc.font('Helvetica-Bold').fontSize(11.5).text('Description', 48, y);
+  doc.text('Total', 48, y, { width: W, align: 'right' });
   doc.moveTo(48, y + 20).lineTo(48 + W, y + 20).strokeColor('#333').lineWidth(1).stroke();
   y += 32;
 
-  // --- Scope ---
-  const tpl = RULES.proposal_language?.scope_templates?.[takeoff.system];
-  const sysLabel = RULES.systems[takeoff.system]?.label ?? takeoff.system;
-  doc.font('Helvetica-Bold').fontSize(11).text(tpl?.title ?? sysLabel, 48, y, { width: W - 110 });
-  doc.font('Helvetica-Bold').text(money(quote.total), 48, y, { width: W, align: 'right' });
-  y = doc.y + 10;
-  doc.font('Helvetica').fontSize(10.5).fillColor('#111');
-  doc.text(`${bid.project ?? ''}${bid.location ? ' — ' + bid.location : ''}`, 48, y, { width: W });
-  y = doc.y + 10;
-  if (tpl?.bullets?.length) {
-    doc.text('Scope of Work:', 48, y); y = doc.y + 6;
-    for (const b of tpl.bullets) {
+  const pageBreak = needed => {
+    if (y + needed > doc.page.height - 70) { doc.addPage(); y = 60; }
+  };
+
+  // --- One titled section per line item, Joist-style ---
+  const sysTpl = RULES.proposal_language?.scope_templates?.[takeoff.system];
+  const coveTpl = RULES.proposal_language?.scope_templates?.cove_base;
+  let first = true;
+  for (const l of quote.lines) {
+    const tpl = l.kind === 'system' ? sysTpl : l.kind === 'cove' ? coveTpl : null;
+    const title = tpl?.title ?? RULES.prep[l.key]?.label ?? l.label;
+    pageBreak(90);
+    doc.font('Helvetica-Bold').fontSize(11).fillColor('#111').text(title, 48, y, { width: W - 110 });
+    doc.text(money(l.amount), 48, y, { width: W, align: 'right' });
+    y = doc.y + 8;
+    doc.font('Helvetica').fontSize(10.5);
+    if (first) {
+      doc.text(`${bid.project ?? ''}${bid.location ? ' — ' + bid.location : ''}`, 48, y, { width: W });
+      y = doc.y + 10;
+    }
+    for (const b of tpl?.bullets ?? []) {
+      pageBreak(30);
       doc.text(`- ${b}`, 48, y, { width: W });
       y = doc.y + 5;
     }
+    y += 4;
+    if (l.kind === 'system') {
+      doc.text('Estimated Coverage:', 48, y); y = doc.y + 5;
+      doc.text(`- Total Project SQFT: ${takeoff.sqft.toLocaleString()}`, 48, y); y = doc.y + 4;
+      y += 4;
+      doc.fillColor('#333').fontSize(9.5)
+        .text(`Note: ${RULES.proposal_language.site_measure_note.trim().replace(/\s+/g, ' ')} This estimate is valid for ${quote.validityDays} days.`, 48, y, { width: W });
+      y = doc.y + 6;
+      doc.fillColor('#111').fontSize(10.5);
+    }
+    if (l.kind === 'cove') {
+      doc.text(`- Total linear feet: ${takeoff.coveLf.toLocaleString()}`, 48, y); y = doc.y + 4;
+    }
     y += 6;
+    if (first) first = false;
+    doc.moveTo(48, y).lineTo(48 + W, y).strokeColor('#dcdfe5').lineWidth(0.7).stroke();
+    y += 12;
   }
-  doc.text('Estimated Coverage:', 48, y); y = doc.y + 5;
-  doc.text(`- Total Project SQFT: ${takeoff.sqft.toLocaleString()}`, 48, y); y = doc.y + 4;
-  if (takeoff.coveLf > 0) { doc.text(`- Total Linear Feet (cove base): ${takeoff.coveLf.toLocaleString()}`, 48, y); y = doc.y + 4; }
-  y += 8;
 
-  // --- Line items ---
-  doc.moveTo(48, y).lineTo(48 + W, y).strokeColor('#dcdfe5').lineWidth(0.7).stroke();
-  y += 10;
-  for (const l of quote.lines) {
-    doc.font('Helvetica').fontSize(10.5).text(l.label, 48, y, { width: W - 110 });
-    doc.text(money(l.amount), 48, y, { width: W, align: 'right' });
-    y = doc.y + 6;
-  }
+  // --- Subtotal / Total, right-aligned like the Joist estimates ---
+  pageBreak(80);
+  const sub = quote.lines.reduce((s, l) => s + l.amount, 0);
+  doc.font('Helvetica-Bold').fontSize(11).text('Subtotal', 340, y);
+  doc.font('Helvetica').text(money(sub), 340, y, { width: W - 292, align: 'right' });
+  y = doc.y + 8;
   if (quote.floored) {
-    doc.fillColor('#555').fontSize(9.5).text(`Base contract adjusted to job minimum (${money(RULES.job_rules.minimum_contract)}).`, 48, y, { width: W });
+    doc.fillColor('#555').fontSize(9.5).text(`Adjusted to job minimum (${money(RULES.job_rules.minimum_contract)})`, 340, y, { width: W - 292 });
     y = doc.y + 6;
     doc.fillColor('#111');
   }
-  y += 4;
-  doc.moveTo(300, y).lineTo(48 + W, y).strokeColor('#333').lineWidth(1).stroke();
-  y += 10;
-  doc.font('Helvetica-Bold').fontSize(11).text('Total', 300, y);
-  doc.text(money(quote.total), 300, y, { width: W - 252, align: 'right' });
-  y = doc.y + 22;
-
-  // --- Notes / exclusions ---
-  doc.font('Helvetica-Bold').fontSize(10.5).text('Notes & Exclusions', 48, y); y = doc.y + 6;
-  doc.font('Helvetica').fontSize(9.5).fillColor('#333');
-  const notes = [
-    ...quote.notes,
-    RULES.proposal_language.site_measure_note.trim(),
-    `This estimate is valid for ${quote.validityDays} days from the date above.`,
-  ];
-  if (bid.proposalExclusions) notes.push(...[].concat(bid.proposalExclusions));
-  for (const n of notes) {
-    const text = `- ${n.replace(/\s+/g, ' ')}`;
-    const h = doc.heightOfString(text, { width: W });
-    if (y + h > doc.page.height - 60) { doc.addPage(); y = 60; }
-    doc.text(text, 48, y, { width: W });
-    y = doc.y + 4;
+  doc.moveTo(340, y).lineTo(48 + W, y).strokeColor('#333').lineWidth(1).stroke();
+  y += 8;
+  doc.font('Helvetica-Bold').fontSize(11.5).text('Total', 340, y);
+  doc.text(money(quote.total), 340, y, { width: W - 292, align: 'right' });
+  y = doc.y + 10;
+  if (bid.proposalExclusions) {
+    pageBreak(60);
+    doc.font('Helvetica').fontSize(9.5).fillColor('#333');
+    for (const n of [].concat(bid.proposalExclusions)) {
+      doc.text(`- ${n.replace(/\s+/g, ' ')}`, 48, y, { width: W });
+      y = doc.y + 4;
+    }
   }
 
   // --- Signature page ---

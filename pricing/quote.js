@@ -25,29 +25,22 @@ export function computeQuote({ system, sqft, coveLf = 0, prep = [] }) {
 
   const lines = [];
   const rate = tierRate(sys.tiers, sqft);
-  lines.push({ label: `${sys.label} — ${sqft.toLocaleString()} sq ft @ $${rate.toFixed(2)}`, amount: sqft * rate });
+  lines.push({ label: `${sys.label} — ${sqft.toLocaleString()} sq ft @ $${rate.toFixed(2)}`, amount: sqft * rate, kind: 'system', key: system });
 
   if (coveLf > 0) {
     const cb = RULES.line_items.cove_base;
     const cbRate = tierRate(cb.tiers, coveLf);
-    lines.push({ label: `${cb.label} — ${coveLf.toLocaleString()} LF @ $${cbRate.toFixed(2)}`, amount: coveLf * cbRate });
+    lines.push({ label: `${cb.label} — ${coveLf.toLocaleString()} LF @ $${cbRate.toFixed(2)}`, amount: coveLf * cbRate, kind: 'cove', key: 'cove_base' });
   }
 
   const notes = [];
   for (const p of prep) {
     const item = RULES.prep[p];
     if (!item) throw new Error(`Unknown prep item "${p}". Options: ${Object.keys(RULES.prep).join(', ')}`);
-    if (item.billing === 'included_in_base') continue;
-    if (item.billing === 'excluded_by_default') {
-      notes.push(item.proposal_note.trim());
-      continue;
-    }
+    if (item.billing === 'included_in_base' || item.billing === 'excluded_by_default') continue;
     const pRate = item.draft_rate ?? item.rate;
-    lines.push({ label: `${item.label} — ${sqft.toLocaleString()} sq ft @ $${pRate.toFixed(2)}`, amount: sqft * pRate });
+    lines.push({ label: `${item.label} — ${sqft.toLocaleString()} sq ft @ $${pRate.toFixed(2)}`, amount: sqft * pRate, kind: 'prep', key: p });
   }
-  // Moisture exclusion note goes on every proposal even if not requested.
-  const mvbNote = RULES.prep.moisture_vapor_barrier.proposal_note.trim();
-  if (!notes.includes(mvbNote)) notes.push(mvbNote);
 
   let subtotal = lines.reduce((s, l) => s + l.amount, 0);
   let floored = false;

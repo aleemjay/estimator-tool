@@ -79,10 +79,7 @@ prep:
     unit: sqft
     rate_range: [3.50, 4.50]
     draft_rate: 4.00
-    proposal_note: >
-      Moisture vapor barrier is excluded. If concrete RH/calcium-chloride
-      testing exceeds the coating manufacturer's limits, MVB will be added
-      at the quoted adder rate.
+    # AJ 2026-07-12: no MVB exclusion note on quotes/proposals.
   coating_glue_removal:
     label: Thick Coating / Glue Removal
     billing: separate_line_item

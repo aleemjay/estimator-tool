@@ -344,7 +344,7 @@ async function price() {
     q.lines.map(l => `<div class="ln"><span>${esc(l.label)}</span><span>${money(l.amount)}</span></div>`).join('') +
     (q.floored ? `<div class="note">raised to job minimum</div>` : '') +
     `<div class="total"><span>Total</span><span>${money(q.total)}</span></div>` +
-    `<div class="note">Valid ${q.validityDays} days · ${q.notes.map(esc).join(' ')}</div>`;
+    `<div class="note">Valid ${q.validityDays} days${q.notes.length ? ' · ' + q.notes.map(esc).join(' ') : ''}</div>`;
 }
 
 function takeoffFromForm() {
