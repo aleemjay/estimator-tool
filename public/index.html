@@ -374,6 +374,24 @@ function render() { renderFilters(); renderList(); }
   ]);
   render();
 })();
+
+// Live refresh: pick up pipeline/agent updates without a manual reload.
+// Skips re-rendering the detail panel while the user is typing in it.
+let lastSnapshot = null;
+setInterval(async () => {
+  try {
+    const fresh = await fetch('/api/bids').then(r => r.json());
+    const snap = JSON.stringify(fresh);
+    if (snap === lastSnapshot) return;
+    const editing = document.activeElement && document.querySelector('.panel')?.contains(document.activeElement) &&
+      ['INPUT', 'TEXTAREA', 'SELECT'].includes(document.activeElement.tagName);
+    lastSnapshot = snap;
+    bids = fresh;
+    renderFilters();
+    renderList();
+    if (selKey && !editing) renderPanel();
+  } catch {}
+}, 15000);
 </script>
 </body>
 </html>
