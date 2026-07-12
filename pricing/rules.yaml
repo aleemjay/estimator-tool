@@ -67,12 +67,14 @@ prep:
     unit: sqft
     rate_range: [0.75, 1.25]
     draft_rate: 1.00
+    proposal_line: Aggressive diamond grinding to correct surface irregularities and achieve the required concrete surface profile.
   shot_blasting:
     label: Shot Blasting (CSP 3-5)
     billing: separate_line_item # standalone or upgrade adder
     unit: sqft
     rate_range: [1.50, 2.25]
     draft_rate: 1.85
+    proposal_line: Shot blasting of the concrete substrate to achieve a CSP 3-5 profile for maximum system adhesion.
   moisture_vapor_barrier:
     label: Moisture Vapor Barrier
     billing: excluded_by_default
@@ -86,6 +88,7 @@ prep:
     unit: sqft
     rate_range: [1.50, 3.00]
     draft_rate: 2.00
+    proposal_line: Mechanical removal of existing thick coatings, glue, and adhesive residue down to sound concrete.
   crack_joint_repair:
     label: Crack & Joint Repair
     billing: allowance_plus_overage
@@ -111,59 +114,110 @@ presentation:
   payment_terms: flexible # negotiated with each contractor; no rigid terms on proposals
   deposit: 500.00 # typical on small/residential direct work (Joist #417); GC bids usually none
 
-# Proposal boilerplate — extracted from real Joist estimates #417 and #418.
+# Proposal boilerplate — structured to mirror Joist estimate #418 exactly:
+# title, intro, "1. System Description", "2. Proposed Scope of Work"
+# (Surface Preparation / Installation subheads), Estimated Coverage.
 proposal_language:
   site_measure_note: >
     This quotation is based on client-provided dimensions. Final project
     totals are subject to adjustment should on-site measurements reveal a
     larger service area than initially estimated.
   scope_templates:
-    epoxy_flake:
-      title: Hybrid Full Flake Flooring System
-      bullets:
-        - Premium multi-layer coating application including surface preparation, base coat, decorative broadcast, and high-performance topcoat.
-        - "Surface Preparation: Mechanically diamond-grind concrete to a specific Surface Profile (CSP) to ensure maximum adhesion."
-        - "Site Remediation: Thorough cleaning and industrial vacuuming of the substrate; repair of minor cracks and voids using a moisture-tolerant epoxy/fiber filler."
-        - "Base Coat Application: Installation of a 100% solids, 10lb moisture-mitigating pigmented epoxy barrier."
-        - "Decorative Broadcast: Full-distribution (to rejection) of 1/4\" decorative vinyl flakes."
-        - "Topcoat Protection: Application of a high-durability Polyaspartic clear topcoat for UV resistance and long-term wear protection."
     quartz:
-      title: Blended Quartz System
-      bullets:
-        - Supply and professional installation of a LATICRETE SPARTACOTE BLENDED QUARTZ or similar Flooring System.
-        - "Epoxy 1150FC base: a self-leveling epoxy base layer, pigmented and broadcast to rejection with colored quartz."
-        - "Polyaspartic HS Slow Cure: a UV-stable, clear topcoat for added durability and chemical resistance."
-        - "Surface Preparation: concrete preparation to CSP 3-5; crack repair and patching as needed."
+      title: BLENDED QUARTZ SYSTEM
+      short_name: Blended Quartz System
+      intro: This proposal outlines the supply and professional installation of a LATICRETE SPARTACOTE BLENDED QUARTZ or similar Flooring System.
+      system_description:
+        - "Epoxy 1150FC base: A self-leveling epoxy base layer, pigmented and broadcast to rejection with colored quartz."
+        - "Polyaspartic HS Slow Cure: A UV-stable, clear topcoat for added durability and chemical resistance."
+      surface_preparation:
+        - Concrete preparation to CSP 3-5
+        - Crack repair and patching as needed
+      installation:
+        - Application of pigmented Epoxy 1150FC
+        - Full quartz broadcast to rejection
+        - Clear polyaspartic topcoat application
+    epoxy_flake:
+      title: HYBRID FULL FLAKE FLOORING SYSTEM
+      short_name: Hybrid Full Flake System
+      intro: This proposal outlines the supply and professional installation of a premium multi-layer Hybrid Full Flake coating system.
+      system_description:
+        - "Pigmented epoxy base: A 100% solids, 10lb moisture-mitigating pigmented epoxy barrier."
+        - "Decorative broadcast: 1/4\" decorative vinyl flakes installed to full rejection."
+        - "Polyaspartic clear topcoat: A high-durability, UV-resistant topcoat for long-term wear protection."
+      surface_preparation:
+        - Mechanical diamond grinding of the concrete to a specific Surface Profile (CSP) to ensure maximum adhesion
+        - Thorough cleaning and industrial vacuuming of the substrate
+        - Repair of minor cracks and voids using a moisture-tolerant epoxy/fiber filler
+      installation:
+        - Application of the pigmented epoxy base coat
+        - Full-distribution flake broadcast to rejection
+        - Scrape, sand, and vacuum of the cured broadcast
+        - Clear polyaspartic topcoat application
+    urethane_cement:
+      title: URETHANE CEMENT FLOORING SYSTEM
+      short_name: Urethane Cement System
+      intro: This proposal outlines the supply and professional installation of a cementitious urethane flooring system rated for thermal shock, wash-down, and chemical exposure.
+      system_description:
+        - "Urethane cement body coat: A self-leveling cementitious urethane installed at manufacturer-specified thickness."
+        - "Chemical-resistant topcoat: A UV-stable topcoat for added durability and chemical resistance."
+      surface_preparation:
+        - Mechanical diamond grinding / shot blasting to CSP 3-5
+        - Keyway cuts at terminations, drains, and transitions to lock the system in
+        - Crack repair and patching as needed
+      installation:
+        - Application of the self-leveling urethane cement body coat
+        - Slip-resistant aggregate broadcast where specified
+        - Chemical-resistant topcoat application
+    solid_color_epoxy:
+      title: SOLID-COLOR HIGH-BUILD EPOXY SYSTEM
+      short_name: Solid-Color Epoxy System
+      intro: This proposal outlines the supply and professional installation of a 100% solids, high-build pigmented epoxy flooring system.
+      system_description:
+        - "High-build pigmented epoxy: A 100% solids epoxy body coat for a seamless, durable finish."
+        - "Protective topcoat: A high-durability clear topcoat for UV resistance and long-term wear protection."
+      surface_preparation:
+        - Mechanical diamond grinding of the concrete to a specific Surface Profile (CSP) to ensure maximum adhesion
+        - Thorough cleaning and industrial vacuuming of the substrate
+        - Repair of minor cracks and voids using a moisture-tolerant epoxy/fiber filler
+      installation:
+        - Application of the pigmented high-build epoxy body coat
+        - Slip-resistant aggregate broadcast where specified
+        - Clear protective topcoat application
+    polished_concrete:
+      title: POLISHED CONCRETE SYSTEM
+      short_name: Polished Concrete System
+      intro: This proposal outlines the mechanical grinding, honing, and polishing of the concrete slab to the specified gloss level.
+      system_description:
+        - "Progressive diamond polishing: Metal-bond and resin-bond diamond tooling through the specified grit sequence."
+        - "Penetrating densifier: Hardens the slab surface for durability and abrasion resistance."
+        - "Stain guard: A penetrating protective treatment for stain resistance and ease of maintenance."
+      surface_preparation:
+        - Initial metal-bond grinding to expose and flatten the surface
+        - Patching and repair of surface defects as needed
+      installation:
+        - Progressive resin-bond polishing steps to the specified gloss level
+        - Densifier application at the specified grit stage
+        - Final polish and stain-guard application with burnish
+    sealed_concrete:
+      title: SEALED CONCRETE (DENSIFIER / GRIND & SEAL)
+      short_name: Sealed Concrete System
+      intro: This proposal outlines the cleaning, preparation, and sealing of the exposed concrete surface for a smooth, dust-proofed, sealed finish.
+      system_description:
+        - "Cleaner / densifier: A penetrating treatment that cleans and hardens the concrete surface."
+        - "Protective sealer: Multiple sealer coats applied per manufacturer specification."
+      surface_preparation:
+        - Thorough cleaning and degreasing of the exposed concrete
+        - Light mechanical grinding where required for adhesion
+        - Repair and patching of minor surface defects as needed
+      installation:
+        - Application of penetrating cleaner/densifier
+        - Application of protective sealer coats per manufacturer specification
     cove_base:
       title: 4" Cove Base
-      bullets:
-        - Installation of a cove base forming a 4" vertical cove up the wall.
+      intro: Installation of a Cove Base. This system forms a 4" vertical cove up the wall.
+      highlights:
         - Walls are primed to ensure proper adhesion.
-        - Cove base mix applied to the wall base at approximately 1/8"-3/16" thickness, troweled to a consistent and compact cove with a clean edge finish.
-    # Templates below drafted to match the Joist voice — AJ to review wording.
-    urethane_cement:
-      title: Urethane Cement Flooring System
-      bullets:
-        - Supply and professional installation of a cementitious urethane flooring system rated for thermal shock, wash-down, and chemical exposure.
-        - "Surface Preparation: mechanical diamond grind / shot blast to the specified concrete surface profile (CSP)."
-        - Self-leveling urethane cement body coat installed at manufacturer-specified thickness.
-        - UV-stable, chemical-resistant topcoat for long-term wear protection.
-    solid_color_epoxy:
-      title: Solid-Color High-Build Epoxy System
-      bullets:
-        - "Surface Preparation: mechanically diamond-grind concrete to a specific Surface Profile (CSP) to ensure maximum adhesion."
-        - "Site Remediation: thorough cleaning and industrial vacuuming of the substrate; repair of minor cracks and voids using a moisture-tolerant epoxy/fiber filler."
-        - Installation of a 100% solids pigmented high-build epoxy body coat.
-        - High-durability clear topcoat for UV resistance and long-term wear protection.
-    polished_concrete:
-      title: Polished Concrete System
-      bullets:
-        - Mechanical grinding, honing, and polishing of the concrete slab to the specified gloss level using progressive diamond tooling.
-        - Application of penetrating densifier to harden the slab surface.
-        - Final stain-guard / sealer application for stain resistance and ease of maintenance.
-    sealed_concrete:
-      title: Sealed Concrete (Densifier / Grind & Seal)
-      bullets:
-        - Thorough cleaning and preparation of the exposed concrete surface.
-        - Repair and patching of minor surface defects as needed.
-        - Application of penetrating cleaner/densifier and protective sealer coats per manufacturer specification for a smooth, dust-proofed, sealed finish.
+        - Cove base mix is applied to the wall base at approximately 1/8"-3/16" thickness.
+        - Material is troweled to form a consistent and compact cove with a clean edge finish.
+        - Acetone is used during application for smoothing and tool cleaning to ensure a professional finish.

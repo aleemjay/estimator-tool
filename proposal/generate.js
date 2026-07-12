@@ -65,42 +65,83 @@ export function generateProposal(bid, quote, takeoff, estimateNo) {
     if (y + needed > doc.page.height - 70) { doc.addPage(); y = 60; }
   };
 
-  // --- One titled section per line item, Joist-style ---
+  // --- One titled section per line item, mirroring Joist estimate #418 ---
   const sysTpl = RULES.proposal_language?.scope_templates?.[takeoff.system];
   const coveTpl = RULES.proposal_language?.scope_templates?.cove_base;
-  let first = true;
+  const hasCove = takeoff.coveLf > 0;
+
+  const para = (text, opts = {}) => {
+    pageBreak(24);
+    doc.text(text, 48, y, { width: W, ...opts });
+    y = doc.y + (opts.gap ?? 5);
+  };
+  const bullets = list => { for (const b of list ?? []) para(`- ${b}`); };
+  const subhead = t => {
+    pageBreak(30);
+    doc.font('Helvetica-Bold').text(t, 48, y, { width: W });
+    y = doc.y + 5;
+    doc.font('Helvetica');
+  };
+
   for (const l of quote.lines) {
-    const tpl = l.kind === 'system' ? sysTpl : l.kind === 'cove' ? coveTpl : null;
-    const title = tpl?.title ?? RULES.prep[l.key]?.label ?? l.label;
-    pageBreak(90);
-    doc.font('Helvetica-Bold').fontSize(11).fillColor('#111').text(title, 48, y, { width: W - 110 });
-    doc.text(money(l.amount), 48, y, { width: W, align: 'right' });
-    y = doc.y + 8;
-    doc.font('Helvetica').fontSize(10.5);
-    if (first) {
-      doc.text(`${bid.project ?? ''}${bid.location ? ' — ' + bid.location : ''}`, 48, y, { width: W });
-      y = doc.y + 10;
-    }
-    for (const b of tpl?.bullets ?? []) {
-      pageBreak(30);
-      doc.text(`- ${b}`, 48, y, { width: W });
-      y = doc.y + 5;
-    }
-    y += 4;
     if (l.kind === 'system') {
-      doc.text('Estimated Coverage:', 48, y); y = doc.y + 5;
-      doc.text(`- Total Project SQFT: ${takeoff.sqft.toLocaleString()}`, 48, y); y = doc.y + 4;
-      y += 4;
-      doc.fillColor('#333').fontSize(9.5)
-        .text(`Note: ${RULES.proposal_language.site_measure_note.trim().replace(/\s+/g, ' ')} This estimate is valid for ${quote.validityDays} days.`, 48, y, { width: W });
-      y = doc.y + 6;
+      pageBreak(110);
+      const title = (sysTpl?.title ?? RULES.systems[takeoff.system]?.label ?? l.key) + (hasCove ? ' / 4" Cove Base' : '');
+      doc.font('Helvetica-Bold').fontSize(11).fillColor('#111').text(title, 48, y, { width: W - 110 });
+      doc.text(money(l.amount), 48, y, { width: W, align: 'right' });
+      y = doc.y + 8;
+      doc.font('Helvetica').fontSize(10.5);
+      para(`${bid.project ?? ''}${bid.location ? ' — ' + bid.location : ''}:`, { gap: 8 });
+      if (sysTpl?.intro) para(sysTpl.intro, { gap: 10 });
+
+      subhead('1. System Description');
+      para(`The ${sysTpl?.short_name ?? 'system'} includes:`, { gap: 6 });
+      bullets(sysTpl?.system_description);
+      y += 5;
+
+      subhead('2. Proposed Scope of Work');
+      subhead('Surface Preparation');
+      bullets(sysTpl?.surface_preparation);
+      y += 3;
+      subhead('Installation');
+      bullets(sysTpl?.installation);
+      if (hasCove) para('- Cove base installation');
+      y += 5;
+
+      subhead('Estimated Coverage:');
+      para(`- Total Project SQFT: ${takeoff.sqft.toLocaleString()}`);
+      if (hasCove) para(`- Total Linear Feet: ${takeoff.coveLf.toLocaleString()}`);
+      y += 2;
+      doc.fillColor('#333').fontSize(9.5);
+      para(`Note: ${RULES.proposal_language.site_measure_note.trim().replace(/\s+/g, ' ')} This estimate is valid for ${quote.validityDays} days.`, { gap: 6 });
       doc.fillColor('#111').fontSize(10.5);
     }
+
     if (l.kind === 'cove') {
-      doc.text(`- Total linear feet: ${takeoff.coveLf.toLocaleString()}`, 48, y); y = doc.y + 4;
+      pageBreak(110);
+      doc.font('Helvetica-Bold').fontSize(11).text(coveTpl?.title ?? '4" Cove Base', 48, y, { width: W - 110 });
+      doc.text(money(l.amount), 48, y, { width: W, align: 'right' });
+      y = doc.y + 8;
+      doc.font('Helvetica').fontSize(10.5);
+      subhead('Cove Base Installation:');
+      if (coveTpl?.intro) para(coveTpl.intro, { gap: 8 });
+      subhead('Installation Process Highlights:');
+      bullets(coveTpl?.highlights);
+      para(`- Total linear feet: ${takeoff.coveLf.toLocaleString()}`);
     }
+
+    if (l.kind === 'prep') {
+      pageBreak(60);
+      const item = RULES.prep[l.key];
+      doc.font('Helvetica-Bold').fontSize(11).text(item?.label ?? l.label, 48, y, { width: W - 110 });
+      doc.text(money(l.amount), 48, y, { width: W, align: 'right' });
+      y = doc.y + 8;
+      doc.font('Helvetica').fontSize(10.5);
+      if (item?.proposal_line) para(item.proposal_line);
+      para(`- Total Project SQFT: ${takeoff.sqft.toLocaleString()}`);
+    }
+
     y += 6;
-    if (first) first = false;
     doc.moveTo(48, y).lineTo(48 + W, y).strokeColor('#dcdfe5').lineWidth(0.7).stroke();
     y += 12;
   }
