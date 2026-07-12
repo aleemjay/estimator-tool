@@ -51,32 +51,65 @@ const ctx = await chromium.launchPersistentContext(join(ROOT, 'data/browser-prof
 });
 const page = ctx.pages()[0] ?? (await ctx.newPage());
 
-async function ensureLoggedIn() {
-  await page.goto('https://app.buildingconnected.com/opportunities', { waitUntil: 'domcontentloaded' });
-  if (page.url().includes('/login')) {
-    console.log('\n>>> Not signed in. Log in to BuildingConnected in the window (one time).');
-    console.log('>>> Waiting up to 30 minutes — take your time.\n');
-    try {
-      await page.waitForURL(u => !String(u).includes('/login'), { timeout: 30 * 60 * 1000 });
-    } catch {
-      console.log('LOGIN_TIMEOUT: BuildingConnected sign-in was not completed in the browser window. Run "npm run login" when you are ready to sign in.');
+// Signed-out states: BC's own /login page, or Autodesk SSO (signin.autodesk.com).
+const NEEDS_AUTH = url => /signin\.autodesk\.com|accounts\.autodesk\.com|app\.buildingconnected\.com\/login/.test(url);
+
+// Wait for auth to complete. If Autodesk SSO just wants a click to resume the
+// remembered session, click it. NEVER touches credential fields — if a
+// password/MFA is requested, we wait for the human.
+async function completeAuth(timeoutMs = 30 * 60 * 1000) {
+  const deadline = Date.now() + timeoutMs;
+  let announced = false;
+  while (Date.now() < deadline) {
+    const url = page.url();
+    if (url.includes('app.buildingconnected.com') && !NEEDS_AUTH(url)) return true;
+    const hasPassword = await page.locator('input[type="password"]').filter({ visible: true }).count().catch(() => 0);
+    if (!hasPassword && /signin\.autodesk\.com|accounts\.autodesk\.com/.test(url)) {
+      // Session-resume prompt: a lone "Sign in" button for the remembered account.
+      const resume = page.getByRole('button', { name: /^sign in$/i }).first();
+      if (await resume.isVisible().catch(() => false)) {
+        await resume.click().catch(() => {});
+        await page.waitForTimeout(5000);
+        continue;
+      }
+    }
+    if (!announced) {
+      console.log('>>> Sign-in needed: complete it in the browser window (waiting up to 30 minutes)...');
+      announced = true;
+    }
+    await page.waitForTimeout(3000);
+  }
+  return false;
+}
+
+async function gotoAuthed(url) {
+  await page.goto(url, { waitUntil: 'domcontentloaded' });
+  await page.waitForTimeout(3000);
+  if (NEEDS_AUTH(page.url())) {
+    if (!(await completeAuth())) {
+      console.log('LOGIN_TIMEOUT: sign-in was not completed. Run "npm run login" when ready.');
       await ctx.close();
       process.exit(1);
     }
-    console.log('Signed in.');
-    await page.waitForTimeout(3000); // let the session settle before first fetch
+    await page.goto(url, { waitUntil: 'domcontentloaded' });
+    await page.waitForTimeout(3000);
   }
 }
 
-async function fetchPlans(key, bid) {
-  const url = bid.rfpId ? `https://app.buildingconnected.com/rfps/${bid.rfpId}/bid` : bid.link;
-  await page.goto(url, { waitUntil: 'domcontentloaded' });
-  await page.waitForTimeout(2500);
+async function ensureLoggedIn() {
+  await gotoAuthed('https://app.buildingconnected.com/opportunities');
+  console.log('Signed in.');
+}
 
-  // Files tab (per AJ's UI: Overview | Files | Messages | Bid Form)
-  const filesTab = page.getByRole('tab', { name: /^files/i }).or(page.getByText(/^Files$/i).first());
-  await filesTab.first().click({ timeout: 15000 });
-  await page.waitForTimeout(2000);
+async function fetchPlans(key, bid) {
+  const base = bid.rfpId ? `https://app.buildingconnected.com/rfps/${bid.rfpId}` : null;
+  // Try the direct files route first; fall back to clicking the Files tab.
+  await gotoAuthed(base ? `${base}/files` : bid.link);
+  if (!/\/files/i.test(page.url())) {
+    const filesTab = page.getByRole('tab', { name: /^files/i }).or(page.getByText(/^Files$/i).first());
+    await filesTab.first().click({ timeout: 30000 });
+    await page.waitForTimeout(2500);
+  }
 
   // Prefer the Client Files view if the toggle exists
   const clientToggle = page.getByText(/^Client\s*Files$/i).first();
