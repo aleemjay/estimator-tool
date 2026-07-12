@@ -10,6 +10,7 @@
 // Usage:
 //   node intake/browser.js            # fetch plans for active bids missing them
 //   node intake/browser.js --key <bidKey>
+//   node intake/browser.js --login    # one-time sign-in only (waits 30 min)
 
 import { chromium } from 'playwright';
 import { readFileSync, writeFileSync, existsSync, mkdirSync, readdirSync } from 'node:fs';
@@ -24,9 +25,10 @@ const PLANS = join(ROOT, 'data/plans');
 const CLOSED = new Set(['won', 'lost', 'declined', 'archived', 'sent']);
 
 const onlyKey = process.argv.includes('--key') ? process.argv[process.argv.indexOf('--key') + 1] : null;
+const loginOnly = process.argv.includes('--login');
 
 const bids = JSON.parse(readFileSync(BIDS, 'utf8'));
-const targets = Object.entries(bids).filter(([key, b]) => {
+const targets = loginOnly ? [] : Object.entries(bids).filter(([key, b]) => {
   if (onlyKey) return key === onlyKey;
   if (CLOSED.has(b.status)) return false;
   if (!b.rfpId && !b.link) return false;
@@ -35,11 +37,11 @@ const targets = Object.entries(bids).filter(([key, b]) => {
   return !have && !b.plansFetchFailed;
 });
 
-if (!targets.length) {
+if (!loginOnly && !targets.length) {
   console.log('No bids need plan fetching.');
   process.exit(0);
 }
-console.log(`Fetching plans for ${targets.length} bid(s)...`);
+if (!loginOnly) console.log(`Fetching plans for ${targets.length} bid(s)...`);
 
 const ctx = await chromium.launchPersistentContext(join(ROOT, 'data/browser-profile'), {
   headless: false,
@@ -53,15 +55,16 @@ async function ensureLoggedIn() {
   await page.goto('https://app.buildingconnected.com/opportunities', { waitUntil: 'domcontentloaded' });
   if (page.url().includes('/login')) {
     console.log('\n>>> Not signed in. Log in to BuildingConnected in the window (one time).');
-    console.log('>>> Waiting up to 5 minutes...\n');
+    console.log('>>> Waiting up to 30 minutes — take your time.\n');
     try {
-      await page.waitForURL(u => !String(u).includes('/login'), { timeout: 5 * 60 * 1000 });
+      await page.waitForURL(u => !String(u).includes('/login'), { timeout: 30 * 60 * 1000 });
     } catch {
-      console.log('LOGIN_TIMEOUT: BuildingConnected sign-in was not completed in the browser window. Click "Fetch plans" again when you are ready to sign in.');
+      console.log('LOGIN_TIMEOUT: BuildingConnected sign-in was not completed in the browser window. Run "npm run login" when you are ready to sign in.');
       await ctx.close();
       process.exit(1);
     }
     console.log('Signed in.');
+    await page.waitForTimeout(3000); // let the session settle before first fetch
   }
 }
 
@@ -100,6 +103,11 @@ async function fetchPlans(key, bid) {
 }
 
 await ensureLoggedIn();
+if (loginOnly) {
+  console.log('Session saved. Plan fetching is now fully automatic — close this window or it closes itself.');
+  await ctx.close();
+  process.exit(0);
+}
 let ok = 0, failed = 0;
 for (const [key, bid] of targets) {
   process.stdout.write(`  ${bid.project} ... `);

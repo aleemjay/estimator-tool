@@ -11,6 +11,7 @@
     "connect": "node connect.js",
     "dashboard": "node server.js",
     "pipeline": "node pipeline.js",
+    "login": "node intake/browser.js --login",
     "intake:email": "node intake/email.js",
     "intake:browser": "node intake/browser.js"
   },
