@@ -141,21 +141,31 @@ if (loginOnly) {
   await ctx.close();
   process.exit(0);
 }
+
+// Re-read bids.json fresh and touch ONLY this bid's fetch fields, so a slow
+// fetch never overwrites takeoff/quote data written meanwhile by the server.
+function recordFetchResult(key, patch) {
+  const fresh = JSON.parse(readFileSync(BIDS, 'utf8'));
+  if (!fresh[key]) return;
+  Object.assign(fresh[key], patch);
+  if (patch.plansFetchedAt) delete fresh[key].plansFetchFailed;
+  writeFileSync(BIDS, JSON.stringify(fresh, null, 2));
+}
+
 let ok = 0, failed = 0;
 for (const [key, bid] of targets) {
   process.stdout.write(`  ${bid.project} ... `);
   try {
     const files = await fetchPlans(key, bid);
-    bid.plansFetchedAt = new Date().toISOString();
-    delete bid.plansFetchFailed;
+    recordFetchResult(key, { plansFetchedAt: new Date().toISOString() });
     console.log(`${files.length} file(s)`);
     ok++;
   } catch (e) {
-    bid.plansFetchFailed = e.message.split('\n')[0].slice(0, 200);
-    console.log(`FAILED: ${bid.plansFetchFailed}`);
+    const msg = e.message.split('\n')[0].slice(0, 200);
+    recordFetchResult(key, { plansFetchFailed: msg });
+    console.log(`FAILED: ${msg}`);
     failed++;
   }
-  writeFileSync(BIDS, JSON.stringify(bids, null, 2));
   await page.waitForTimeout(1500 + Math.random() * 2000);
 }
 
