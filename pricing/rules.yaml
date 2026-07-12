@@ -108,7 +108,7 @@ job_rules:
   gc_adjustments: none # same numbers for every GC — no premiums/discounts
 
 presentation:
-  round_total_to_nearest: 500
+  round_total_to_nearest: 1 # exact totals (AJ 2026-07-12); set 500 to round again
   quote_validity_days: 60
   warranty: omit # never mention warranty on proposals
   payment_terms: flexible # negotiated with each contractor; no rigid terms on proposals

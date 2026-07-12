@@ -26,16 +26,23 @@ const CLOSED = new Set(['won', 'lost', 'declined', 'archived', 'sent']);
 
 const onlyKey = process.argv.includes('--key') ? process.argv[process.argv.indexOf('--key') + 1] : null;
 const loginOnly = process.argv.includes('--login');
+const includeOverdue = process.argv.includes('--include-overdue');
 
 const bids = JSON.parse(readFileSync(BIDS, 'utf8'));
+let skippedOverdue = 0;
 const targets = loginOnly ? [] : Object.entries(bids).filter(([key, b]) => {
   if (onlyKey) return key === onlyKey;
   if (CLOSED.has(b.status)) return false;
   if (!b.rfpId && !b.link) return false;
+  if (!includeOverdue) {
+    const due = new Date(b.due ?? '');
+    if (!isNaN(due) && due < new Date(new Date().toDateString())) { skippedOverdue++; return false; }
+  }
   const dir = join(PLANS, planSlug(key));
   const have = existsSync(dir) && readdirSync(dir).some(f => /\.(pdf|png|jpe?g)$/i.test(f));
   return !have && !b.plansFetchFailed;
 });
+if (skippedOverdue) console.log(`(skipping ${skippedOverdue} past-due bid(s) — use --include-overdue to force)`);
 
 if (!loginOnly && !targets.length) {
   console.log('No bids need plan fetching.');

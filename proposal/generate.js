@@ -66,9 +66,10 @@ export function generateProposal(bid, quote, takeoff, estimateNo) {
   };
 
   // --- One titled section per line item, mirroring Joist estimate #418 ---
-  const sysTpl = RULES.proposal_language?.scope_templates?.[takeoff.system];
   const coveTpl = RULES.proposal_language?.scope_templates?.cove_base;
   const hasCove = takeoff.coveLf > 0;
+  const systemLines = quote.lines.filter(l => l.kind === 'system');
+  let firstSystem = true;
 
   const para = (text, opts = {}) => {
     pageBreak(24);
@@ -86,12 +87,17 @@ export function generateProposal(bid, quote, takeoff, estimateNo) {
   for (const l of quote.lines) {
     if (l.kind === 'system') {
       pageBreak(110);
-      const title = (sysTpl?.title ?? RULES.systems[takeoff.system]?.label ?? l.key) + (hasCove ? ' / 4" Cove Base' : '');
+      const sysTpl = RULES.proposal_language?.scope_templates?.[l.key];
+      const title = (sysTpl?.title ?? RULES.systems[l.key]?.label ?? l.key) +
+        (hasCove && systemLines.length === 1 ? ' / 4" Cove Base' : '');
       doc.font('Helvetica-Bold').fontSize(11).fillColor('#111').text(title, 48, y, { width: W - 110 });
       doc.text(money(l.amount), 48, y, { width: W, align: 'right' });
       y = doc.y + 8;
       doc.font('Helvetica').fontSize(10.5);
-      para(`${bid.project ?? ''}${bid.location ? ' — ' + bid.location : ''}:`, { gap: 8 });
+      if (firstSystem) {
+        para(`${bid.project ?? ''}${bid.location ? ' — ' + bid.location : ''}:`, { gap: 8 });
+        firstSystem = false;
+      }
       if (sysTpl?.intro) para(sysTpl.intro, { gap: 10 });
 
       subhead('1. System Description');
@@ -105,16 +111,18 @@ export function generateProposal(bid, quote, takeoff, estimateNo) {
       y += 3;
       subhead('Installation');
       bullets(sysTpl?.installation);
-      if (hasCove) para('- Cove base installation');
+      if (hasCove && systemLines.length === 1) para('- Cove base installation');
       y += 5;
 
       subhead('Estimated Coverage:');
-      para(`- Total Project SQFT: ${takeoff.sqft.toLocaleString()}`);
-      if (hasCove) para(`- Total Linear Feet: ${takeoff.coveLf.toLocaleString()}`);
+      para(`- Total Project SQFT: ${(l.sqft ?? takeoff.sqft ?? 0).toLocaleString()}`);
+      if (hasCove && systemLines.length === 1) para(`- Total Linear Feet: ${takeoff.coveLf.toLocaleString()}`);
       y += 2;
-      doc.fillColor('#333').fontSize(9.5);
-      para(`Note: ${RULES.proposal_language.site_measure_note.trim().replace(/\s+/g, ' ')} This estimate is valid for ${quote.validityDays} days.`, { gap: 6 });
-      doc.fillColor('#111').fontSize(10.5);
+      if (l === systemLines[systemLines.length - 1]) {
+        doc.fillColor('#333').fontSize(9.5);
+        para(`Note: ${RULES.proposal_language.site_measure_note.trim().replace(/\s+/g, ' ')} This estimate is valid for ${quote.validityDays} days.`, { gap: 6 });
+        doc.fillColor('#111').fontSize(10.5);
+      }
     }
 
     if (l.kind === 'cove') {

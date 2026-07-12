@@ -51,11 +51,11 @@ step('3/4 AI takeoffs');
       const result = await runTakeoff(b, listPlans(PLANS, key).dir);
       const fresh = loadBids();
       fresh[key].aiTakeoff = result;
-      if (result.system) {
-        fresh[key].takeoff = { system: result.system, sqft: result.sqft, coveLf: result.coveLf, prep: result.prep };
+      if (result.items?.length) {
+        fresh[key].takeoff = { items: result.items, coveLf: result.coveLf, prep: result.prep };
       }
       saveBids(fresh);
-      console.log(`${result.system ?? 'no scope'} / ${result.sqft} sqft (${result.confidence})`);
+      console.log(`${result.items?.map(i => `${i.system} ${i.sqft}sf`).join(' + ') || 'no scope'} (${result.confidence})`);
     } catch (e) {
       console.log(`FAILED: ${e.message.split('\n')[0]}`);
     }
@@ -69,10 +69,11 @@ step('4/4 Draft quotes');
   let drafted = 0;
   for (const [, b] of Object.entries(bids)) {
     if (CLOSED.has(b.status)) continue;
-    const t = b.takeoff;
-    if (!t?.system || !t?.sqft) continue;
+    const t = b.takeoff ?? {};
+    const items = t.items?.length ? t.items : (t.system ? [{ system: t.system, sqft: t.sqft, rateOverride: t.rateOverride ?? null }] : []);
+    if (!items.some(it => it.sqft > 0)) continue;
     if (!b.quote) {
-      const q = computeQuote({ system: t.system, sqft: t.sqft, coveLf: t.coveLf ?? 0, prep: t.prep ?? [], rateOverride: t.rateOverride ?? null });
+      const q = computeQuote({ items, coveLf: t.coveLf ?? 0, prep: t.prep ?? [] });
       b.quote = { total: q.total, draftedAt: new Date().toISOString() };
       drafted++;
     }

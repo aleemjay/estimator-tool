@@ -16,7 +16,7 @@
   }
   * { box-sizing: border-box; }
   body { margin: 0; font: 15px/1.45 -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; background: var(--bg); color: var(--ink); }
-  header { display: flex; align-items: baseline; gap: 14px; padding: 18px 26px 10px; }
+  header { display: flex; align-items: center; gap: 14px; padding: 18px 26px 10px; }
   header h1 { font-size: 20px; margin: 0; }
   header .sub { color: var(--muted); font-size: 13px; }
   .filters { padding: 0 26px 12px; display: flex; gap: 8px; flex-wrap: wrap; }
@@ -81,7 +81,11 @@
 <header>
   <h1>EpoxyCreations Estimator</h1>
   <span class="sub" id="counts"></span>
+  <span style="flex:1"></span>
+  <button class="secondary" id="btn-intake" onclick="runJob('intake')">Fetch new bids</button>
+  <button class="primary" id="btn-pipeline" onclick="runJob('pipeline')">Run pipeline</button>
 </header>
+<div id="job-status" style="padding:0 26px 8px;font-size:12.5px;color:var(--muted)"></div>
 <div class="filters" id="filters"></div>
 <main>
   <div class="list" id="list"></div>
@@ -164,11 +168,12 @@ function renderPanel() {
     </dl>
     <div class="section">
       <h3>Quote builder</h3>
-      <div class="qgrid">
-        <div><label>System</label><select id="q-system">${Object.entries(rules.systems).map(([k, v]) => `<option value="${k}" ${t.system === k ? 'selected' : ''}>${esc(v)}</option>`).join('')}</select></div>
-        <div><label>Sq ft</label><input id="q-sqft" type="number" placeholder="sq ft" value="${t.sqft ?? ''}"></div>
-        <div><label>Cove LF</label><input id="q-cove" type="number" placeholder="cove LF" value="${t.coveLf ?? ''}"></div>
-        <div><label>Rate $/sf (blank = card)</label><input id="q-rate" type="number" step="0.25" placeholder="auto" value="${t.rateOverride ?? ''}"></div>
+      <div id="q-items"></div>
+      <div class="btnrow" style="margin:2px 0 8px">
+        <button class="secondary" style="padding:4px 10px;font-size:12px" onclick="addItemRow()">+ add system</button>
+        <span style="flex:1"></span>
+        <span style="font-size:11px;color:var(--muted)">Cove LF</span>
+        <input id="q-cove" type="number" placeholder="0" value="${t.coveLf ?? ''}" style="width:90px">
       </div>
       <div class="preps">${Object.entries(rules.prep).map(([k, v]) =>
         `<label><input type="checkbox" name="prep" value="${k}" ${(t.prep ?? []).includes(k) ? 'checked' : ''}> ${esc(v)}</label>`).join('')}</div>
@@ -213,10 +218,25 @@ function renderPanel() {
       <div class="emails">${(b.emails ?? []).slice().reverse().map(e =>
         `<div class="em"><span class="kind">${esc(e.kind)}</span><span>${esc(e.subject)}</span></div>`).join('')}</div>
     </div>`;
-  ['q-system', 'q-sqft', 'q-cove', 'q-rate'].forEach(id => $('#' + id).addEventListener('input', price));
+  const items = t.items?.length ? t.items : (t.system ? [{ system: t.system, sqft: t.sqft, rateOverride: t.rateOverride }] : [{}]);
+  $('#q-items').innerHTML = '';
+  for (const it of items) addItemRow(it);
+  $('#q-cove').addEventListener('input', price);
   document.querySelectorAll('input[name=prep]').forEach(el => el.addEventListener('change', price));
   price();
   loadPlans();
+}
+
+function addItemRow(it = {}) {
+  const div = document.createElement('div');
+  div.className = 'qgrid qitem';
+  div.innerHTML = `
+    <div><label>System</label><select data-f="system">${Object.entries(rules.systems).map(([k, v]) => `<option value="${k}" ${it.system === k ? 'selected' : ''}>${esc(v)}</option>`).join('')}</select></div>
+    <div><label>Sq ft</label><input data-f="sqft" type="number" placeholder="sq ft" value="${it.sqft ?? ''}"></div>
+    <div><label>Rate $/sf (blank = card)</label><input data-f="rate" type="number" step="0.25" placeholder="auto" value="${it.rateOverride ?? ''}"></div>
+    <div style="align-self:end"><button class="secondary" style="padding:6px 10px" title="remove" onclick="this.closest('.qitem').remove();price()">✕</button></div>`;
+  div.querySelectorAll('select,input').forEach(el => el.addEventListener('input', price));
+  $('#q-items').appendChild(div);
 }
 
 function renderAibox(b) {
@@ -340,9 +360,8 @@ async function sendAuthFlow() {
 }
 
 async function price() {
-  const sqft = Number($('#q-sqft').value);
-  if (!sqft) { $('#q-out').textContent = 'Enter a takeoff to price.'; return; }
-  const body = takeoffFromForm(); // includes rateOverride from the rate field
+  const body = takeoffFromForm();
+  if (!body.items.length) { $('#q-out').textContent = 'Enter a takeoff to price.'; return; }
   const q = await fetch('/api/quote', { method: 'POST', body: JSON.stringify(body) }).then(r => r.json());
   if (q.error) { $('#q-out').textContent = q.error; return; }
   $('#q-out').innerHTML =
@@ -353,11 +372,14 @@ async function price() {
 }
 
 function takeoffFromForm() {
+  const items = [...document.querySelectorAll('.qitem')].map(row => ({
+    system: row.querySelector('[data-f=system]').value,
+    sqft: Number(row.querySelector('[data-f=sqft]').value) || 0,
+    rateOverride: Number(row.querySelector('[data-f=rate]').value) || null,
+  })).filter(it => it.sqft > 0);
   return {
-    system: $('#q-system').value,
-    sqft: Number($('#q-sqft').value) || 0,
+    items,
     coveLf: Number($('#q-cove').value) || 0,
-    rateOverride: Number($('#q-rate').value) || null,
     prep: [...document.querySelectorAll('input[name=prep]:checked')].map(el => el.value),
   };
 }
@@ -380,6 +402,34 @@ function render() { renderFilters(); renderList(); }
   ]);
   render();
 })();
+
+// Header jobs: email intake ("fetch new bids") and the full pipeline.
+let jobTimer = null;
+async function runJob(name) {
+  const r = await fetch('/api/' + name, { method: 'POST' }).then(r => r.json());
+  if (r.error) { $('#job-status').textContent = r.error; return; }
+  watchJob(name);
+}
+function watchJob(name) {
+  $('#btn-intake').disabled = $('#btn-pipeline').disabled = true;
+  const label = name === 'pipeline'
+    ? 'Pipeline running — new invites, plan downloads, AI takeoffs, quotes. A browser window may open; this can take a while.'
+    : 'Checking Outlook for new BuildingConnected invites…';
+  $('#job-status').textContent = label;
+  clearInterval(jobTimer);
+  jobTimer = setInterval(async () => {
+    const s = await fetch('/api/job-status?name=' + name).then(r => r.json());
+    if (s.status === 'running') {
+      if (s.log) $('#job-status').textContent = label + '  ·  ' + s.log;
+      return;
+    }
+    clearInterval(jobTimer);
+    $('#btn-intake').disabled = $('#btn-pipeline').disabled = false;
+    $('#job-status').textContent = (s.status === 'done' ? '✓ ' : '✗ ') + (s.log ?? s.status).split('\n').slice(-3).join(' · ');
+    bids = await fetch('/api/bids').then(r => r.json());
+    render();
+  }, 4000);
+}
 
 // Live refresh: pick up pipeline/agent updates without a manual reload.
 // Skips re-rendering the detail panel while the user is typing in it.

@@ -19,8 +19,15 @@ const SCHEMA = `{
   "executive_summary": "<MAX 2 short sentences: building type + city, GC, what the overall project is. Telegraphic, no filler.>",
   "scope": "<ONE terse line, our scope only. Format: '<system> ~<SF> SF (<rooms/finish codes>)' — join multiple systems with ' + '. Example: 'Sealed concrete ~1,596 SF (7 rooms, FC-2) + slip-resistant epoxy 497 SF (chem storage 109)'>",
   "not_our_scope": "<ONE terse line of what in this bid is NOT our trade. Example: 'LVT in exam/treatment rooms (flooring sub), rubber base, paint'>",
-  "system": "<one of: epoxy_flake | quartz | urethane_cement | solid_color_epoxy | polished_concrete | sealed_concrete | none>",
-  "sqft": <number, total sq ft of OUR scope (resinous/sealed/polished concrete flooring); 0 if none>,
+  "items": [
+    {
+      "system": "<one of: epoxy_flake | quartz | urethane_cement | solid_color_epoxy | polished_concrete | sealed_concrete>",
+      "sqft": <number>,
+      "area_note": "<MAX 10 words: which rooms/finish codes this covers>"
+    }
+    // ONE ENTRY PER DISTINCT SYSTEM in our scope. A bid with sealed concrete
+    // in some rooms and epoxy in others = TWO items. Empty array if none.
+  ],
   "coveLf": <number, linear feet of integral cove base in our scope, 0 if none/unknown>,
   "prep": [<any of: "heavy_corrective_grinding", "shot_blasting", "coating_glue_removal" — ONLY if the documents put that work in the flooring contractor's scope, not the GC/demo contractor's>],
   "confidence": "<high|medium|low>",
@@ -44,7 +51,7 @@ Method:
 1. List the PDFs (Glob). Start with the smallest/most-likely-architectural set.
 2. In large combined sets, find the sheet index on the cover, then read ONLY the relevant sheets: finish plan + finish schedule (usually A-1xx), demolition notes (D-1xx), and the code/floor plan sheet with room areas. PDFs over 10 pages must be read with the pages parameter (max 20 pages per call) — read targeted small ranges, not the whole set.
 3. From the finish schedule, identify which floor finish codes are resinous/sealed/polished concrete systems (read their spec descriptions — e.g. epoxy, urethane, sealer, densifier product names) vs other trades.
-4. Sum the floor areas of rooms specced with OUR finish codes. Use room areas from plans where stated; flag any you had to estimate.
+4. Sum the floor areas of rooms specced with OUR finish codes. Use room areas from plans where stated; flag any you had to estimate. If our scope contains MORE THAN ONE distinct system (e.g. sealed concrete in some rooms, epoxy in others), report each as its own entry in "items" with its own sq ft — never blend different systems into one number.
 5. Check demolition general notes for whether existing flooring removal/grinding is by the GC/demo contractor or left to the flooring contractor.
 
 Return ONLY a JSON object exactly matching this schema (no prose, no code fences):
@@ -69,13 +76,21 @@ export function runTakeoff(bid, plansDir, { timeoutMs = 15 * 60 * 1000 } = {}) {
           const end = text.lastIndexOf('}');
           if (start < 0 || end < 0) return reject(new Error(`takeoff agent returned no JSON: ${text.slice(0, 300)}`));
           const parsed = JSON.parse(text.slice(start, end + 1));
+          const items = (Array.isArray(parsed.items) ? parsed.items : [])
+            .filter(it => it?.system && it.system !== 'none' && Number(it.sqft) > 0)
+            .map(it => ({ system: it.system, sqft: Number(it.sqft), areaNote: it.area_note ?? '' }));
+          // Legacy single-system fallback for older prompt outputs.
+          if (!items.length && parsed.system && parsed.system !== 'none' && Number(parsed.sqft) > 0) {
+            items.push({ system: parsed.system, sqft: Number(parsed.sqft), areaNote: '' });
+          }
           resolve({
             execSummary: parsed.executive_summary ?? '',
             scope: parsed.scope ?? '',
             notScope: parsed.not_our_scope ?? '',
             summary: parsed.summary ?? undefined, // legacy field, absent in new runs
-            system: parsed.system === 'none' ? null : parsed.system,
-            sqft: Number(parsed.sqft) || 0,
+            items,
+            system: items[0]?.system ?? null,
+            sqft: items.reduce((s, it) => s + it.sqft, 0),
             coveLf: Number(parsed.coveLf) || 0,
             prep: Array.isArray(parsed.prep) ? parsed.prep : [],
             confidence: parsed.confidence ?? 'low',

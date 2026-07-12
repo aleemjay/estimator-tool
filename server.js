@@ -30,9 +30,9 @@ function startTakeoffRun(key) {
     .then(result => {
       const fresh = loadBids();
       fresh[key].aiTakeoff = result;
-      if (result.system) {
-        fresh[key].takeoff = { system: result.system, sqft: result.sqft, coveLf: result.coveLf, prep: result.prep };
-        const q = computeQuote({ system: result.system, sqft: result.sqft, coveLf: result.coveLf, prep: result.prep });
+      if (result.items?.length) {
+        fresh[key].takeoff = { items: result.items, coveLf: result.coveLf, prep: result.prep };
+        const q = computeQuote({ items: result.items, coveLf: result.coveLf, prep: result.prep });
         fresh[key].quote = { total: q.total, draftedAt: new Date().toISOString() };
         if (fresh[key].status === 'new' || fresh[key].status === 'takeoff') fresh[key].status = 'quote';
       } else if (fresh[key].status === 'new') {
@@ -43,6 +43,15 @@ function startTakeoffRun(key) {
     })
     .catch(e => takeoffRuns.set(key, { status: 'error', error: e.message }));
   return true;
+}
+
+// Normalize a stored takeoff (legacy single-system or items shape) for computeQuote.
+function takeoffArgs(t) {
+  return {
+    items: t.items?.length ? t.items : (t.system ? [{ system: t.system, sqft: t.sqft, rateOverride: t.rateOverride ?? null }] : []),
+    coveLf: t.coveLf ?? 0,
+    prep: t.prep ?? [],
+  };
 }
 
 const loadBids = () => (existsSync(BIDS) ? JSON.parse(readFileSync(BIDS, 'utf8')) : {});
@@ -93,8 +102,8 @@ createServer(async (req, res) => {
       return json(res, 200, bids[key]);
     }
     if (url.pathname === '/api/quote' && req.method === 'POST') {
-      const { system, sqft, coveLf, prep, rateOverride } = await readBody(req);
-      return json(res, 200, computeQuote({ system, sqft: Number(sqft) || 0, coveLf: Number(coveLf) || 0, prep: prep ?? [], rateOverride: Number(rateOverride) || null }));
+      const body = await readBody(req);
+      return json(res, 200, computeQuote(takeoffArgs(body)));
     }
 
     // --- plans + AI takeoff ---
@@ -152,9 +161,10 @@ createServer(async (req, res) => {
       const bids = loadBids();
       const bid = bids[key];
       if (!bid) return json(res, 404, { error: 'unknown bid' });
-      const t = bid.takeoff;
-      if (!t?.system || !t?.sqft) return json(res, 400, { error: 'save a takeoff (system + sqft) first' });
-      const quote = computeQuote({ system: t.system, sqft: t.sqft, coveLf: t.coveLf ?? 0, prep: t.prep ?? [], rateOverride: t.rateOverride ?? null });
+      const t = bid.takeoff ?? {};
+      const args = takeoffArgs(t);
+      if (!args.items.length || !args.items.some(it => it.sqft > 0)) return json(res, 400, { error: 'save a takeoff (system + sqft) first' });
+      const quote = computeQuote(args);
       const estimateNo = bid.estimateNo ?? nextEstimateNumber();
       const file = generateProposal(bid, quote, t, estimateNo);
       bid.estimateNo = estimateNo;
@@ -168,6 +178,43 @@ createServer(async (req, res) => {
       if (!existsSync(file)) return json(res, 404, { error: 'no such proposal' });
       res.writeHead(200, { 'Content-Type': 'application/pdf', 'Content-Disposition': `inline; filename="${basename(file)}"` });
       return res.end(readFileSync(file));
+    }
+
+    // --- pipeline + intake buttons ---
+    if (url.pathname === '/api/pipeline' && req.method === 'POST') {
+      if (fetchRuns.get('__pipeline__')?.status === 'running') return json(res, 409, { error: 'pipeline already running' });
+      fetchRuns.set('__pipeline__', { status: 'running', startedAt: Date.now(), log: '' });
+      let out = '';
+      const child = spawn('node', ['pipeline.js'], { cwd: ROOT });
+      const onData = d => {
+        out += d;
+        const tail = out.split('\n').filter(Boolean).slice(-3).join(' · ');
+        fetchRuns.set('__pipeline__', { status: 'running', log: tail });
+      };
+      child.stdout.on('data', onData);
+      child.stderr.on('data', onData);
+      child.on('exit', code => {
+        const tail = out.split('\n').filter(Boolean).slice(-12).join('\n');
+        fetchRuns.set('__pipeline__', { status: code === 0 ? 'done' : 'error', log: tail });
+      });
+      return json(res, 202, { status: 'running' });
+    }
+    if (url.pathname === '/api/intake' && req.method === 'POST') {
+      if (fetchRuns.get('__intake__')?.status === 'running') return json(res, 409, { error: 'intake already running' });
+      fetchRuns.set('__intake__', { status: 'running', startedAt: Date.now() });
+      let out = '';
+      const child = spawn('node', ['intake/email.js'], { cwd: ROOT });
+      child.stdout.on('data', d => (out += d));
+      child.stderr.on('data', d => (out += d));
+      child.on('exit', code => {
+        const summary = out.split('\n').find(l => /new email|new project|Scanned/.test(l)) ?? out.split('\n').filter(Boolean).pop() ?? '';
+        fetchRuns.set('__intake__', { status: code === 0 ? 'done' : 'error', log: summary });
+      });
+      return json(res, 202, { status: 'running' });
+    }
+    if (url.pathname === '/api/job-status' && req.method === 'GET') {
+      const name = url.searchParams.get('name');
+      return json(res, 200, fetchRuns.get(`__${name}__`) ?? { status: 'idle' });
     }
 
     // --- send flow ---
