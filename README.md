@@ -68,6 +68,25 @@ npm run intake:email     # just pull new invites
 npm run intake:browser   # just fetch missing plan files
 ```
 
+### Keeping it running (Mac)
+
+The dashboard is meant to be always on so it's reachable from the phone
+over Tailscale. Install/refresh the LaunchAgent with:
+
+```
+./setup/install-launchagent.sh
+```
+
+It starts the server at login, relaunches it on crash (`kill $(lsof -ti
+:8788)` is still the standard restart after a code update), keeps the
+Mac awake while running (`caffeinate -s`), and writes logs to
+`logs/server.log`. For full survive-a-reboot coverage also enable, one
+time, in System Settings: automatic login (needs FileVault off), "Start
+up automatically after a power failure" (Energy), and **Remote Login**
+(Sharing) so the Mac can be fixed over SSH/Tailscale when away from
+home — lesson learned 2026-07-13 when the server went down while AJ was
+out and nothing could be restarted remotely.
+
 Per-bid workflow in the dashboard:
 1. **Plans** — download the set from BuildingConnected ("Download All") and
    drop the PDFs into the folder shown on the bid (data/plans/<id>/).

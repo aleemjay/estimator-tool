@@ -11,7 +11,8 @@ history and usage.
 - `npm run dashboard` — web UI on http://localhost:8788 (normally already
   running via LaunchAgent `com.epoxycreations.estimator`, which also
   keeps the Mac awake; reachable from AJ's phone over Tailscale at
-  http://100.111.28.79:8788)
+  http://100.111.28.79:8788). `./setup/install-launchagent.sh`
+  installs/refreshes the agent (RunAtLoad + KeepAlive + logs/server.log)
 - `npm run pipeline` — full sweep: intake → plan fetch → takeoffs → quotes
   (skips past-due bids; `--include-overdue` to force)
 - `npm run intake:email` — pull new invites from Outlook (Graph)
