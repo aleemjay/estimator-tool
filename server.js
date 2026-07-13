@@ -45,6 +45,26 @@ function startTakeoffRun(key) {
   return true;
 }
 
+// After a proposal goes out, flip the bid's status on BuildingConnected
+// (browser session — the API route stays 403 until paid Bid Board Pro).
+// Fire-and-forget: the script records bcStatus/bcStatusFailed on the bid.
+const bcRuns = new Map(); // bidKey -> {status:'running'|'done'|'error', error?}
+function startBcStatusRun(key, statusLabel = 'Bidding') {
+  if (bcRuns.get(key)?.status === 'running') return false;
+  bcRuns.set(key, { status: 'running', startedAt: Date.now() });
+  let out = '';
+  const child = spawn('node', ['intake/browser.js', '--set-status', statusLabel, '--key', key], { cwd: ROOT });
+  child.stdout.on('data', d => (out += d));
+  child.stderr.on('data', d => (out += d));
+  child.on('exit', code => {
+    if (code === 0) return bcRuns.set(key, { status: 'done' });
+    const lines = out.split('\n').map(s => s.trim()).filter(Boolean);
+    const meaningful = lines.find(l => /SET_STATUS_FAILED|LOGIN_TIMEOUT|Error|Timeout/i.test(l)) ?? lines.pop() ?? 'failed';
+    bcRuns.set(key, { status: 'error', error: meaningful.slice(0, 250) });
+  });
+  return true;
+}
+
 // Normalize a stored takeoff (legacy single-system or items shape) for computeQuote.
 function takeoffArgs(t) {
   return {
@@ -107,7 +127,7 @@ createServer(async (req, res) => {
     }
 
     // --- plans + AI takeoff ---
-    const takeoffMatch = url.pathname.match(/^\/api\/bids\/([^/]+)\/(plans|takeoff|takeoff-status|fetch-plans|fetch-status)$/);
+    const takeoffMatch = url.pathname.match(/^\/api\/bids\/([^/]+)\/(plans|takeoff|takeoff-status|fetch-plans|fetch-status|bc-status)$/);
     if (takeoffMatch) {
       const key = decodeURIComponent(takeoffMatch[1]);
       const action = takeoffMatch[2];
@@ -124,6 +144,14 @@ createServer(async (req, res) => {
       }
       if (action === 'fetch-status') {
         return json(res, 200, fetchRuns.get(key) ?? { status: 'idle' });
+      }
+      if (action === 'bc-status') {
+        if (req.method === 'POST') {
+          if (!bids[key].rfpId && !bids[key].link) return json(res, 400, { error: 'bid has no BuildingConnected link' });
+          if (!startBcStatusRun(key)) return json(res, 409, { error: 'update already running' });
+          return json(res, 202, { status: 'running' });
+        }
+        return json(res, 200, bcRuns.get(key) ?? { status: 'idle' });
       }
       if (action === 'takeoff' && req.method === 'POST') {
         const { dir, files } = listPlans(PLANS, key);
@@ -243,7 +271,8 @@ createServer(async (req, res) => {
         bid.sentAt = new Date().toISOString();
         bid.sentTo = to;
         saveBids(bids);
-        return json(res, 200, { sent: true });
+        const bcUpdating = (bid.rfpId || bid.link) ? startBcStatusRun(key) : false;
+        return json(res, 200, { sent: true, bcUpdating });
       } catch (e) {
         return json(res, e.code === 'NO_AUTH' ? 401 : e.code === 'NO_PERMISSION' ? 403 : 500, { error: e.message, code: e.code ?? null });
       }

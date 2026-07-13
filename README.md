@@ -78,7 +78,10 @@ Per-bid workflow in the dashboard:
 4. **Generate proposal PDF** — branded estimate (Joist look, sequential
    numbering continuing at #419) written to proposals/.
 5. **Send to GC…** — emails the PDF from contact@epoxycreationsfl.com via
-   Microsoft Graph after a confirm dialog. First use requires a one-time
+   Microsoft Graph after a confirm dialog. After a successful send the
+   browser session also flips the bid's Bid Board status on
+   BuildingConnected to **Bidding** automatically (result shown under the
+   Send button, with a retry button if it fails). First use requires a one-time
    device-code sign-in (the UI walks through it). If Microsoft reports a
    permissions error, add **Mail.Send** (Delegated) to the Entra app the
    same way Mail.Read was added.

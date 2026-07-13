@@ -211,6 +211,7 @@ function renderPanel() {
         <button class="primary" onclick="sendToGC()">Send to GC…</button>
         <span class="saved" id="send-msg">${b.sentAt ? 'sent ' + new Date(b.sentAt).toLocaleDateString() + ' to ' + esc(b.sentTo ?? '') : ''}</span>
       </div>
+      <div class="btnrow" id="bc-line" style="font-size:12.5px;color:var(--muted)">${renderBcLine(b)}</div>
       <div id="send-extra"></div>
     </div>
     <div class="section">
@@ -324,6 +325,21 @@ async function genProposal() {
   $('#prop-link').innerHTML = `<a href="${r.file}" target="_blank">estimate #${r.estimateNo} (PDF)</a> — ${money(r.total)}`;
 }
 
+// BuildingConnected Bid Board status — set automatically after a send;
+// this line shows the outcome and offers retry / manual trigger.
+function renderBcLine(b) {
+  if (!(b.rfpId || b.link)) return '';
+  if (b.bcStatus) return `BuildingConnected: marked “${esc(b.bcStatus)}” ✓`;
+  if (b.bcStatusFailed) return `BuildingConnected status update failed <button class="secondary" style="padding:3px 9px;font-size:12px" onclick="markBidding()">retry</button> <span>${esc(b.bcStatusFailed)}</span>`;
+  if (b.status === 'sent') return `<button class="secondary" style="padding:3px 9px;font-size:12px" onclick="markBidding()">mark “Bidding” on BuildingConnected</button>`;
+  return '';
+}
+
+async function markBidding() {
+  const r = await fetch('/api/bids/' + encodeURIComponent(selKey) + '/bc-status', { method: 'POST' }).then(r => r.json());
+  $('#bc-line').textContent = r.error ?? 'updating BuildingConnected status to “Bidding”… (a browser window may open on the Mac)';
+}
+
 async function sendToGC() {
   const to = $('#send-to').value.trim();
   const subject = $('#send-subject').value.trim();
@@ -335,7 +351,13 @@ async function sendToGC() {
   const body = `Hello,\n\nPlease find attached our proposal (estimate #${b.estimateNo}) for ${b.project}.\n\nThank you,\nAleem Javed\nEpoxy Creations LLC\n(321) 328-0030`;
   const r = await fetch('/api/bids/' + encodeURIComponent(selKey) + '/send', { method: 'POST', body: JSON.stringify({ to, subject, body }) });
   const out = await r.json();
-  if (out.sent) { $('#send-msg').textContent = 'sent ✓'; bids[selKey].status = 'sent'; renderList(); return; }
+  if (out.sent) {
+    $('#send-msg').textContent = 'sent ✓';
+    bids[selKey].status = 'sent';
+    if (out.bcUpdating) $('#bc-line').textContent = 'updating BuildingConnected status to “Bidding”…';
+    renderList();
+    return;
+  }
   if (out.code === 'NO_AUTH') return sendAuthFlow();
   if (out.code === 'NO_PERMISSION') {
     $('#send-extra').innerHTML = `<div class="warn"><b>One-time setup needed:</b> the Entra app is missing the <b>Mail.Send</b> permission. In entra.microsoft.com open App registrations → EpoxyCreations Estimator → API permissions → Add a permission → Microsoft Graph → Delegated → <b>Mail.Send</b> → Add. Then click Send again.</div>`;

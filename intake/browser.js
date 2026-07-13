@@ -11,6 +11,8 @@
 //   node intake/browser.js            # fetch plans for active bids missing them
 //   node intake/browser.js --key <bidKey>
 //   node intake/browser.js --login    # one-time sign-in only (waits 30 min)
+//   node intake/browser.js --set-status Bidding --key <bidKey>
+//                                     # flip the bid's Bid Board status on BC
 
 import { chromium } from 'playwright';
 import { readFileSync, writeFileSync, existsSync, mkdirSync, readdirSync } from 'node:fs';
@@ -27,10 +29,11 @@ const CLOSED = new Set(['won', 'lost', 'declined', 'archived', 'sent']);
 const onlyKey = process.argv.includes('--key') ? process.argv[process.argv.indexOf('--key') + 1] : null;
 const loginOnly = process.argv.includes('--login');
 const includeOverdue = process.argv.includes('--include-overdue');
+const setStatusTo = process.argv.includes('--set-status') ? process.argv[process.argv.indexOf('--set-status') + 1] : null;
 
 const bids = JSON.parse(readFileSync(BIDS, 'utf8'));
 let skippedOverdue = 0;
-const targets = loginOnly ? [] : Object.entries(bids).filter(([key, b]) => {
+const targets = (loginOnly || setStatusTo) ? [] : Object.entries(bids).filter(([key, b]) => {
   if (onlyKey) return key === onlyKey;
   if (CLOSED.has(b.status)) return false;
   if (!b.rfpId && !b.link) return false;
@@ -44,11 +47,11 @@ const targets = loginOnly ? [] : Object.entries(bids).filter(([key, b]) => {
 });
 if (skippedOverdue) console.log(`(skipping ${skippedOverdue} past-due bid(s) — use --include-overdue to force)`);
 
-if (!loginOnly && !targets.length) {
+if (!loginOnly && !setStatusTo && !targets.length) {
   console.log('No bids need plan fetching.');
   process.exit(0);
 }
-if (!loginOnly) console.log(`Fetching plans for ${targets.length} bid(s)...`);
+if (!loginOnly && !setStatusTo) console.log(`Fetching plans for ${targets.length} bid(s)...`);
 
 const ctx = await chromium.launchPersistentContext(join(ROOT, 'data/browser-profile'), {
   headless: false,
@@ -142,6 +145,30 @@ async function fetchPlans(key, bid) {
   return files;
 }
 
+// The Bid Board status control on an opportunity page shows the current
+// state (Undecided / Bidding / Declined / ...) and opens a menu of states.
+const BC_STATES = /undecided|considering|bidding|not bidding|declined|submitted|won|lost/i;
+
+async function setBcStatus(bid, statusLabel) {
+  const url = bid.rfpId ? `https://app.buildingconnected.com/rfps/${bid.rfpId}` : bid.link;
+  if (!url) throw new Error('bid has no BuildingConnected link');
+  await gotoAuthed(url);
+  const exact = new RegExp(`^\\s*${statusLabel}\\s*$`, 'i');
+  const control = page.getByRole('button', { name: BC_STATES }).or(page.getByRole('combobox', { name: BC_STATES })).first();
+  await control.waitFor({ timeout: 30000 });
+  if (await control.textContent().catch(() => '').then(t => exact.test(t ?? ''))) return; // already set
+  await control.click();
+  await page.waitForTimeout(1200);
+  const option = page.getByRole('menuitem', { name: exact })
+    .or(page.getByRole('option', { name: exact }))
+    .or(page.getByText(exact));
+  await option.first().click({ timeout: 15000 });
+  await page.waitForTimeout(2500);
+  const shown = await page.getByRole('button', { name: exact }).or(page.getByRole('combobox', { name: exact }))
+    .first().isVisible().catch(() => false);
+  if (!shown) throw new Error(`clicked "${statusLabel}" but the status control does not show it`);
+}
+
 await ensureLoggedIn();
 if (loginOnly) {
   console.log('Session saved. Plan fetching is now fully automatic — close this window or it closes itself.');
@@ -156,7 +183,30 @@ function recordFetchResult(key, patch) {
   if (!fresh[key]) return;
   Object.assign(fresh[key], patch);
   if (patch.plansFetchedAt) delete fresh[key].plansFetchFailed;
+  if (patch.bcStatus) delete fresh[key].bcStatusFailed;
   writeFileSync(BIDS, JSON.stringify(fresh, null, 2));
+}
+
+if (setStatusTo) {
+  const bid = onlyKey ? bids[onlyKey] : null;
+  if (!bid) {
+    console.log('SET_STATUS_FAILED: --set-status requires --key <bidKey>');
+    await ctx.close();
+    process.exit(1);
+  }
+  try {
+    await setBcStatus(bid, setStatusTo);
+    recordFetchResult(onlyKey, { bcStatus: setStatusTo, bcStatusAt: new Date().toISOString() });
+    console.log(`BC status set to "${setStatusTo}" for ${bid.project}`);
+    await ctx.close();
+    process.exit(0);
+  } catch (e) {
+    const msg = e.message.split('\n')[0].slice(0, 200);
+    recordFetchResult(onlyKey, { bcStatusFailed: msg });
+    console.log(`SET_STATUS_FAILED: ${msg}`);
+    await ctx.close();
+    process.exit(1);
+  }
 }
 
 let ok = 0, failed = 0;

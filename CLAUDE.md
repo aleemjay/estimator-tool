@@ -27,7 +27,10 @@ history and usage.
   BuildingConnected notification emails into bids by rfps/<id> link +
   fuzzy name match → `data/bids.json`
 - `intake/browser.js` — Playwright plan downloader (attended-capable);
-  auto-resumes Autodesk SSO prompts, never touches credential fields
+  auto-resumes Autodesk SSO prompts, never touches credential fields.
+  Also `--set-status <label> --key <key>`: flips the bid's Bid Board
+  status on BC (server triggers it with "Bidding" after each send;
+  records bcStatus/bcStatusFailed on the bid)
 - `takeoff/run.js` — headless `claude -p` reads plan PDFs in
   `data/plans/<key>/`, returns items[] (one per system), terse
   scope/not-scope, judgment calls (~$1/run, uses AJ's Claude login)
