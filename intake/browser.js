@@ -204,6 +204,15 @@ if (setStatusTo) {
     const msg = e.message.split('\n')[0].slice(0, 200);
     recordFetchResult(onlyKey, { bcStatusFailed: msg });
     console.log(`SET_STATUS_FAILED: ${msg}`);
+    // Diagnostics for tuning the selectors against the real BC page:
+    // screenshot + the text of every button-ish control currently visible.
+    try {
+      await page.screenshot({ path: join(ROOT, 'data/bc-status-fail.png') });
+      const texts = await page.locator('button, [role=button], [role=combobox], [role=menuitem], [role=option]').allTextContents();
+      console.log('PAGE URL:', page.url());
+      console.log('VISIBLE CONTROLS:', JSON.stringify([...new Set(texts.map(t => t.trim()).filter(Boolean))].slice(0, 80)));
+      console.log('Screenshot saved to data/bc-status-fail.png');
+    } catch {}
     await ctx.close();
     process.exit(1);
   }
