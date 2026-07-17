@@ -106,7 +106,7 @@ function visible() {
   return Object.entries(bids).filter(([, b]) => {
     if (filter === 'all') return true;
     if (filter === 'closed') return isClosed(b.status);
-    if (filter === 'active') return !isClosed(b.status);
+    if (filter === 'active') return ['new', 'takeoff', 'quote', 'approved'].includes(b.status);
     if (filter === 'new') return b.status === 'new' || b.status === 'takeoff';
     if (filter === 'quote') return b.status === 'quote' || b.status === 'approved';
     if (filter === 'sent') return b.status === 'sent';
