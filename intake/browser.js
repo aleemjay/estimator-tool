@@ -47,6 +47,32 @@ const targets = (loginOnly || setStatusTo) ? [] : Object.entries(bids).filter(([
 });
 if (skippedOverdue) console.log(`(skipping ${skippedOverdue} past-due bid(s) — use --include-overdue to force)`);
 
+// Resolve the --set-status target bid (by --key, or --project name match)
+// BEFORE opening a browser window, so bad input fails fast.
+let statusKey = null;
+if (setStatusTo) {
+  const proj = process.argv.includes('--project') ? process.argv[process.argv.indexOf('--project') + 1] : null;
+  if (onlyKey && bids[onlyKey]) {
+    statusKey = onlyKey;
+  } else if (proj) {
+    const matches = Object.entries(bids).filter(([, b]) => (b.project ?? '').toLowerCase().includes(proj.toLowerCase()));
+    if (matches.length !== 1) {
+      console.log(matches.length
+        ? `SET_STATUS_FAILED: "${proj}" matches ${matches.length} bids: ${matches.map(([k]) => k).join(', ')}`
+        : `SET_STATUS_FAILED: no bid whose project name contains "${proj}"`);
+      process.exit(1);
+    }
+    statusKey = matches[0][0];
+  } else {
+    console.log(onlyKey
+      ? `SET_STATUS_FAILED: no bid with key "${onlyKey}"`
+      : 'SET_STATUS_FAILED: pass --key <bidKey> or --project <name substring>');
+    console.log('Known bids:', Object.keys(bids).join(', '));
+    process.exit(1);
+  }
+  console.log(`Target: ${bids[statusKey].project} (${statusKey}) -> "${setStatusTo}"`);
+}
+
 if (!loginOnly && !setStatusTo && !targets.length) {
   console.log('No bids need plan fetching.');
   process.exit(0);
@@ -188,21 +214,16 @@ function recordFetchResult(key, patch) {
 }
 
 if (setStatusTo) {
-  const bid = onlyKey ? bids[onlyKey] : null;
-  if (!bid) {
-    console.log('SET_STATUS_FAILED: --set-status requires --key <bidKey>');
-    await ctx.close();
-    process.exit(1);
-  }
+  const bid = bids[statusKey];
   try {
     await setBcStatus(bid, setStatusTo);
-    recordFetchResult(onlyKey, { bcStatus: setStatusTo, bcStatusAt: new Date().toISOString() });
+    recordFetchResult(statusKey, { bcStatus: setStatusTo, bcStatusAt: new Date().toISOString() });
     console.log(`BC status set to "${setStatusTo}" for ${bid.project}`);
     await ctx.close();
     process.exit(0);
   } catch (e) {
     const msg = e.message.split('\n')[0].slice(0, 200);
-    recordFetchResult(onlyKey, { bcStatusFailed: msg });
+    recordFetchResult(statusKey, { bcStatusFailed: msg });
     console.log(`SET_STATUS_FAILED: ${msg}`);
     // Diagnostics for tuning the selectors against the real BC page:
     // screenshot + the text of every button-ish control currently visible.
