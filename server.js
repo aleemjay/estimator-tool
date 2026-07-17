@@ -10,6 +10,7 @@ import { dirname, join, basename } from 'node:path';
 import { parse } from 'yaml';
 import { computeQuote } from './pricing/quote.js';
 import { runTakeoff, listPlans, planSlug } from './takeoff/run.js';
+import { askBid } from './takeoff/chat.js';
 import { generateProposal, nextEstimateNumber } from './proposal/generate.js';
 import { startSendAuth, pollSendAuth, sendAuthReady, sendProposal } from './proposal/send.js';
 
@@ -20,6 +21,7 @@ const PLANS = join(ROOT, 'data/plans');
 const RULES = parse(readFileSync(join(ROOT, 'pricing/rules.yaml'), 'utf8'));
 const takeoffRuns = new Map(); // bidKey -> {status:'running'|'done'|'error', error?}
 const fetchRuns = new Map(); // bidKey -> same shape
+const chatRuns = new Map(); // bidKey -> same shape
 
 function startTakeoffRun(key) {
   const bids = loadBids();
@@ -127,7 +129,7 @@ createServer(async (req, res) => {
     }
 
     // --- plans + AI takeoff ---
-    const takeoffMatch = url.pathname.match(/^\/api\/bids\/([^/]+)\/(plans|takeoff|takeoff-status|fetch-plans|fetch-status|bc-status)$/);
+    const takeoffMatch = url.pathname.match(/^\/api\/bids\/([^/]+)\/(plans|takeoff|takeoff-status|fetch-plans|fetch-status|bc-status|chat|chat-status)$/);
     if (takeoffMatch) {
       const key = decodeURIComponent(takeoffMatch[1]);
       const action = takeoffMatch[2];
@@ -144,6 +146,40 @@ createServer(async (req, res) => {
       }
       if (action === 'fetch-status') {
         return json(res, 200, fetchRuns.get(key) ?? { status: 'idle' });
+      }
+      if (action === 'chat-status') {
+        return json(res, 200, chatRuns.get(key) ?? { status: 'idle' });
+      }
+      if (action === 'chat' && req.method === 'POST') {
+        const { message } = await readBody(req);
+        const q = String(message ?? '').trim();
+        if (!q) return json(res, 400, { error: 'empty question' });
+        if (chatRuns.get(key)?.status === 'running') return json(res, 409, { error: 'still answering the previous question' });
+        chatRuns.set(key, { status: 'running', startedAt: Date.now() });
+        const history = bids[key].chatLog ?? [];
+        {
+          const fresh = loadBids();
+          fresh[key].chatLog = [...(fresh[key].chatLog ?? []), { role: 'user', text: q, at: new Date().toISOString() }].slice(-40);
+          saveBids(fresh);
+        }
+        const { dir, files } = listPlans(PLANS, key);
+        mkdirSync(dir, { recursive: true }); // cwd for the agent even when no plans yet
+        askBid({
+          bid: bids[key],
+          rulesYaml: readFileSync(join(ROOT, 'pricing/rules.yaml'), 'utf8'),
+          plansDir: dir,
+          hasPlans: !!files.length,
+          history,
+          question: q,
+        })
+          .then(a => {
+            const fresh = loadBids();
+            fresh[key].chatLog = [...(fresh[key].chatLog ?? []), { role: 'assistant', text: a.text, at: new Date().toISOString() }].slice(-40);
+            saveBids(fresh);
+            chatRuns.set(key, { status: 'done' });
+          })
+          .catch(e => chatRuns.set(key, { status: 'error', error: e.message.slice(0, 250) }));
+        return json(res, 202, { status: 'running' });
       }
       if (action === 'bc-status') {
         if (req.method === 'POST') {
