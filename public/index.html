@@ -204,7 +204,9 @@ function renderPanel() {
         <span id="prop-link">${b.proposalFile ? `<a href="/proposals/${esc(b.proposalFile)}" target="_blank">estimate #${esc(String(b.estimateNo))} (PDF)</a>` : ''}</span>
       </div>
       <div class="sendgrid">
-        <input type="text" id="send-to" placeholder="recipient email" value="${esc(b.contactEmail ?? '')}">
+        <input type="text" id="send-to" placeholder="recipient email(s), comma-separated"
+          value="${esc(b.recipients?.length ? b.recipients.join(', ') : (b.contactEmail ?? ''))}"
+          onchange="saveRecipients()">
         <input type="text" id="send-subject" value="${esc('Proposal — ' + (b.project ?? '') + ' — Epoxy Creations LLC')}">
       </div>
       <div class="btnrow">
@@ -340,13 +342,24 @@ async function markBidding() {
   $('#bc-line').textContent = r.error ?? 'updating BuildingConnected status to “Bidding”… (a browser window may open on the Mac)';
 }
 
+const parseRecipients = () => $('#send-to').value.split(/[,;]/).map(s => s.trim()).filter(Boolean);
+
+// Persist edited recipients on the bid so they stick across visits/devices.
+async function saveRecipients() {
+  const recipients = parseRecipients();
+  bids[selKey] = await fetch('/api/bids/' + encodeURIComponent(selKey), { method: 'POST', body: JSON.stringify({ recipients }) }).then(r => r.json());
+}
+
 async function sendToGC() {
-  const to = $('#send-to').value.trim();
+  const recipients = parseRecipients();
   const subject = $('#send-subject').value.trim();
   const b = bids[selKey];
   if (!b.proposalFile) { $('#send-msg').textContent = 'generate the proposal first'; return; }
-  if (!to) { $('#send-msg').textContent = 'enter a recipient'; return; }
-  if (!confirm(`Send estimate #${b.estimateNo} for "${b.project}" to ${to}?\n\nThis emails the proposal PDF from your account.`)) return;
+  if (!recipients.length) { $('#send-msg').textContent = 'enter a recipient'; return; }
+  const bad = recipients.filter(a => !/^\S+@\S+\.\S+$/.test(a));
+  if (bad.length) { $('#send-msg').textContent = 'invalid email: ' + bad.join(', '); return; }
+  const to = recipients.join(', ');
+  if (!confirm(`Send estimate #${b.estimateNo} for "${b.project}" to:\n\n${recipients.join('\n')}\n\nThis emails the proposal PDF from your account.`)) return;
   $('#send-msg').textContent = 'sending…';
   const body = `Hello,\n\nPlease find attached our proposal (estimate #${b.estimateNo}) for ${b.project}.\n\nThank you,\nAleem Javed\nEpoxy Creations LLC\n(321) 328-0030`;
   const r = await fetch('/api/bids/' + encodeURIComponent(selKey) + '/send', { method: 'POST', body: JSON.stringify({ to, subject, body }) });

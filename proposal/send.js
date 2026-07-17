@@ -85,6 +85,10 @@ async function accessToken() {
 }
 
 export async function sendProposal({ to, subject, bodyText, pdfPath }) {
+  // `to` may be a single address, a comma/semicolon-separated string, or an array.
+  const recipients = (Array.isArray(to) ? to : String(to).split(/[,;]/))
+    .map(s => s.trim()).filter(Boolean);
+  if (!recipients.length) throw new Error('no recipients');
   const token = await accessToken();
   const res = await fetch('https://graph.microsoft.com/v1.0/me/sendMail', {
     method: 'POST',
@@ -94,7 +98,7 @@ export async function sendProposal({ to, subject, bodyText, pdfPath }) {
       message: {
         subject,
         body: { contentType: 'Text', content: bodyText },
-        toRecipients: [{ emailAddress: { address: to } }],
+        toRecipients: recipients.map(a => ({ emailAddress: { address: a } })),
         attachments: [{
           '@odata.type': '#microsoft.graph.fileAttachment',
           name: basename(pdfPath),

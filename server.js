@@ -115,7 +115,7 @@ createServer(async (req, res) => {
       if (!bids[key]) return json(res, 404, { error: 'unknown bid' });
       const patch = await readBody(req);
       // Only fields the UI owns — never let a patch clobber intake data.
-      for (const f of ['status', 'notes', 'takeoff', 'quote']) {
+      for (const f of ['status', 'notes', 'takeoff', 'quote', 'recipients']) {
         if (f in patch) bids[key][f] = patch[f];
       }
       saveBids(bids);
@@ -264,12 +264,16 @@ createServer(async (req, res) => {
       if (!bid) return json(res, 404, { error: 'unknown bid' });
       if (!bid.proposalFile) return json(res, 400, { error: 'generate the proposal first' });
       const { to, subject, body } = await readBody(req);
-      if (!to) return json(res, 400, { error: 'no recipient' });
+      const recipients = (Array.isArray(to) ? to : String(to ?? '').split(/[,;]/)).map(s => s.trim()).filter(Boolean);
+      if (!recipients.length) return json(res, 400, { error: 'no recipient' });
+      const bad = recipients.filter(a => !/^\S+@\S+\.\S+$/.test(a));
+      if (bad.length) return json(res, 400, { error: `invalid email: ${bad.join(', ')}` });
       try {
-        await sendProposal({ to, subject, bodyText: body, pdfPath: join(ROOT, 'proposals', bid.proposalFile) });
+        await sendProposal({ to: recipients, subject, bodyText: body, pdfPath: join(ROOT, 'proposals', bid.proposalFile) });
         bid.status = 'sent';
         bid.sentAt = new Date().toISOString();
-        bid.sentTo = to;
+        bid.sentTo = recipients.join(', ');
+        bid.recipients = recipients;
         saveBids(bids);
         const bcUpdating = (bid.rfpId || bid.link) ? startBcStatusRun(key) : false;
         return json(res, 200, { sent: true, bcUpdating });
