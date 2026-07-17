@@ -69,6 +69,9 @@ export function generateProposal(bid, quote, takeoff, estimateNo) {
   const coveTpl = RULES.proposal_language?.scope_templates?.cove_base;
   const hasCove = takeoff.coveLf > 0;
   const systemLines = quote.lines.filter(l => l.kind === 'system');
+  // UI-saved takeoffs are items[]-shaped with no top-level sqft; prep lines
+  // price on the combined area, so derive it from the quote's system lines.
+  const totalSqft = takeoff.sqft ?? systemLines.reduce((s, l) => s + (l.sqft ?? 0), 0);
   let firstSystem = true;
 
   const para = (text, opts = {}) => {
@@ -115,7 +118,7 @@ export function generateProposal(bid, quote, takeoff, estimateNo) {
       y += 5;
 
       subhead('Estimated Coverage:');
-      para(`- Total Project SQFT: ${(l.sqft ?? takeoff.sqft ?? 0).toLocaleString()}`);
+      para(`- Total Project SQFT: ${(l.sqft ?? totalSqft).toLocaleString()}`);
       if (hasCove && systemLines.length === 1) para(`- Total Linear Feet: ${takeoff.coveLf.toLocaleString()}`);
       y += 2;
       if (l === systemLines[systemLines.length - 1]) {
@@ -146,7 +149,7 @@ export function generateProposal(bid, quote, takeoff, estimateNo) {
       y = doc.y + 8;
       doc.font('Helvetica').fontSize(10.5);
       if (item?.proposal_line) para(item.proposal_line);
-      para(`- Total Project SQFT: ${takeoff.sqft.toLocaleString()}`);
+      para(`- Total Project SQFT: ${totalSqft.toLocaleString()}`);
     }
 
     y += 6;
