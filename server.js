@@ -228,6 +228,9 @@ createServer(async (req, res) => {
       const t = bid.takeoff ?? {};
       const args = takeoffArgs(t);
       if (!args.items.length || !args.items.some(it => it.sqft > 0)) return json(res, 400, { error: 'save a takeoff (system + sqft) first' });
+      if (/^\s*$|tbd|to confirm|unknown|placeholder/i.test(bid.client ?? '')) {
+        return json(res, 400, { error: `Set the GC's name on this bid first (client is "${bid.client ?? ''}") — it prints on the proposal.` });
+      }
       const quote = computeQuote(args);
       const estimateNo = bid.estimateNo ?? nextEstimateNumber();
       const file = generateProposal(bid, quote, t, estimateNo);

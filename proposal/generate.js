@@ -28,7 +28,14 @@ export function nextEstimateNumber() {
 
 const money = n => '$' + Number(n).toLocaleString(undefined, { minimumFractionDigits: 2 });
 
+const PLACEHOLDER_CLIENT = /^\s*$|tbd|to confirm|unknown|placeholder/i;
+
 export function generateProposal(bid, quote, takeoff, estimateNo) {
+  // The GC's name prints in the Prepared For header and on the signature
+  // line — never let a placeholder reach a customer-facing PDF.
+  if (PLACEHOLDER_CLIENT.test(bid.client ?? '')) {
+    throw Object.assign(new Error(`Set the GC's name on this bid before generating a proposal (client is "${bid.client ?? ''}")`), { code: 'NO_CLIENT' });
+  }
   mkdirSync(join(ROOT, 'proposals'), { recursive: true });
   const file = join(ROOT, 'proposals', `estimate-${estimateNo}.pdf`);
   const doc = new PDFDocument({ size: 'LETTER', margins: { top: 54, bottom: 54, left: 48, right: 48 } });

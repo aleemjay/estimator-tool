@@ -73,3 +73,9 @@ Proposals mirror AJ's Joist estimates #417/#418: logo header, Prepared
 For block, per-system sections (intro → "1. System Description" →
 "2. Proposed Scope of Work" with Surface Preparation / Installation
 subheads → Estimated Coverage), Subtotal/Total, signature page.
+
+- **Always put the GC's real name** as the bid's `client` — it prints in
+  the Prepared For header and on the signature line. Never a placeholder
+  ("TBD", "GC to confirm", blank). If the GC isn't known yet, get it
+  before generating/sending a proposal; `generateProposal` throws on a
+  placeholder/empty client so one can't reach a customer PDF.
