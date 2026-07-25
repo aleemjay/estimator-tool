@@ -117,7 +117,7 @@ createServer(async (req, res) => {
       if (!bids[key]) return json(res, 404, { error: 'unknown bid' });
       const patch = await readBody(req);
       // Only fields the UI owns — never let a patch clobber intake data.
-      for (const f of ['status', 'notes', 'takeoff', 'quote', 'recipients']) {
+      for (const f of ['status', 'notes', 'takeoff', 'quote', 'recipients', 'followUpDismissed']) {
         if (f in patch) bids[key][f] = patch[f];
       }
       saveBids(bids);
@@ -295,6 +295,32 @@ createServer(async (req, res) => {
       const { deviceCode } = await readBody(req);
       return json(res, 200, await pollSendAuth(deviceCode));
     }
+    // Follow-up: re-send the already-generated proposal with a nudge email
+    // after the bid's due date has passed. Records followUpAt on the bid.
+    const followMatch = url.pathname.match(/^\/api\/bids\/([^/]+)\/follow-up$/);
+    if (followMatch && req.method === 'POST') {
+      const key = decodeURIComponent(followMatch[1]);
+      const bids = loadBids();
+      const bid = bids[key];
+      if (!bid) return json(res, 404, { error: 'unknown bid' });
+      if (!bid.proposalFile) return json(res, 400, { error: 'no proposal on this bid to follow up on' });
+      const { to, subject, body } = await readBody(req);
+      const recipients = (Array.isArray(to) ? to : String(to ?? '').split(/[,;]/)).map(s => s.trim()).filter(Boolean);
+      if (!recipients.length) return json(res, 400, { error: 'no recipient' });
+      const bad = recipients.filter(a => !/^\S+@\S+\.\S+$/.test(a));
+      if (bad.length) return json(res, 400, { error: `invalid email: ${bad.join(', ')}` });
+      try {
+        await sendProposal({ to: recipients, subject, bodyText: body, pdfPath: join(ROOT, 'proposals', bid.proposalFile) });
+        bid.followUpAt = new Date().toISOString();
+        bid.followUpTo = recipients.join(', ');
+        bid.recipients = recipients;
+        saveBids(bids);
+        return json(res, 200, { sent: true });
+      } catch (e) {
+        return json(res, e.code === 'NO_AUTH' ? 401 : e.code === 'NO_PERMISSION' ? 403 : 500, { error: e.message, code: e.code ?? null });
+      }
+    }
+
     const sendMatch = url.pathname.match(/^\/api\/bids\/([^/]+)\/send$/);
     if (sendMatch && req.method === 'POST') {
       const key = decodeURIComponent(sendMatch[1]);

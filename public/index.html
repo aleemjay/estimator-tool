@@ -41,6 +41,7 @@
   .chip.quote, .chip.takeoff, .chip.approved { background: var(--chip-quote); color: var(--chip-quote-ink); }
   .chip.sent, .chip.won { background: var(--chip-sent); color: var(--chip-sent-ink); }
   .chip.lost, .chip.declined, .chip.archived { background: var(--chip-closed); color: var(--chip-closed-ink); }
+  .chip.followup { background: #fde8e8; color: #b42318; }
   .panel { background: var(--card); border: 1px solid var(--line); border-radius: 12px; padding: 18px 20px; position: sticky; top: 14px; }
   .panel h2 { margin: 0 0 2px; font-size: 17px; }
   .panel .client { color: var(--muted); margin-bottom: 12px; }
@@ -107,12 +108,15 @@ const esc = s => (s ?? '').replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':
 const dueDate = b => { const d = new Date(b.due ?? ''); return isNaN(d) ? null : d; };
 const money = n => '$' + Number(n).toLocaleString(undefined, {minimumFractionDigits: n % 1 ? 2 : 0});
 const isClosed = s => ['won','lost','declined','archived'].includes(s);
+// Sent bid whose due date passed 1+ days ago, not yet followed up or dismissed.
+const needsFollowUp = b => b.status === 'sent' && b.proposalFile && dueDate(b) &&
+  (Date.now() - dueDate(b).getTime()) >= 86400e3 && !b.followUpAt && !b.followUpDismissed;
 
 function visible() {
   return Object.entries(bids).filter(([, b]) => {
     if (filter === 'all') return true;
     if (filter === 'closed') return isClosed(b.status);
-    if (filter === 'active') return ['new', 'takeoff', 'quote', 'approved'].includes(b.status);
+    if (filter === 'active') return ['new', 'takeoff', 'quote', 'approved'].includes(b.status) || needsFollowUp(b);
     if (filter === 'new') return b.status === 'new' || b.status === 'takeoff';
     if (filter === 'quote') return b.status === 'quote' || b.status === 'approved';
     if (filter === 'sent') return b.status === 'sent';
@@ -120,7 +124,7 @@ function visible() {
 }
 
 function renderFilters() {
-  const overdue = Object.entries(bids).filter(([, b]) => !isClosed(b.status) && dueDate(b) && dueDate(b) < new Date()).length;
+  const overdue = Object.entries(bids).filter(([, b]) => !isClosed(b.status) && b.status !== 'sent' && dueDate(b) && dueDate(b) < new Date()).length;
   $('#filters').innerHTML = FILTERS.map(f =>
     `<button class="${f === filter ? 'on' : ''}" onclick="filter='${f}';render()">${f}</button>`).join('') +
     (overdue ? `<button style="margin-left:auto;color:var(--late)" onclick="archiveOverdue()">archive ${overdue} overdue</button>` : '');
@@ -133,7 +137,7 @@ async function quickClose(ev, key, status) {
 }
 
 async function archiveOverdue() {
-  const targets = Object.entries(bids).filter(([, b]) => !isClosed(b.status) && dueDate(b) && dueDate(b) < new Date());
+  const targets = Object.entries(bids).filter(([, b]) => !isClosed(b.status) && b.status !== 'sent' && dueDate(b) && dueDate(b) < new Date());
   if (!confirm(`Archive ${targets.length} bid(s) whose due date has passed?\n\n${targets.map(([, b]) => '• ' + b.project).join('\n')}`)) return;
   for (const [k] of targets) {
     bids[k] = await fetch('/api/bids/' + encodeURIComponent(k), { method: 'POST', body: JSON.stringify({ status: 'archived' }) }).then(r => r.json());
@@ -153,7 +157,7 @@ function renderList() {
       <div class="due ${late ? 'late' : ''}">${d ? 'due ' + d.toLocaleDateString() : ''}</div>
       ${!isClosed(b.status) ? `<button class="close-btn" title="Decline this bid" onclick="quickClose(event,'${esc(k)}','declined')">✕ decline</button>` : '<span></span>'}
       <div class="meta">${esc(b.client ?? 'GC unknown')}${b.trade ? ' · ' + esc(b.trade) : ''} · ${b.emails?.length ?? 0} email${(b.emails?.length ?? 0) === 1 ? '' : 's'}</div>
-      <div class="chip ${esc(b.status)}">${esc(b.status)}</div>
+      <div class="chip ${needsFollowUp(b) ? 'followup' : esc(b.status)}">${needsFollowUp(b) ? 'follow up' : esc(b.status)}</div>
     </div>`;
   }).join('') : '<div class="empty">Nothing here</div>';
 }
@@ -229,6 +233,7 @@ function renderPanel() {
         <span class="saved" id="send-msg">${b.sentAt ? 'sent ' + new Date(b.sentAt).toLocaleDateString() + ' to ' + esc(b.sentTo ?? '') : ''}</span>
       </div>
       <div class="btnrow" id="bc-line" style="font-size:12.5px;color:var(--muted)">${renderBcLine(b)}</div>
+      <div id="followup-box">${renderFollowUp(b)}</div>
       <div id="send-extra"></div>
     </div>
     <div class="section">
@@ -357,6 +362,44 @@ function renderBcLine(b) {
 async function markBidding() {
   const r = await fetch('/api/bids/' + encodeURIComponent(selKey) + '/bc-status', { method: 'POST' }).then(r => r.json());
   $('#bc-line').textContent = r.error ?? 'updating BuildingConnected status to “Bidding”… (a browser window may open on the Mac)';
+}
+
+// --- post-due follow-up ---
+const followUpBody = b => `Hello,\n\nI wanted to follow up on our proposal (estimate #${b.estimateNo}) for ${b.project}, sent ${b.sentAt ? new Date(b.sentAt).toLocaleDateString() : 'previously'}. Please let me know if you have any questions or if there is anything else you need from us — I've attached the proposal again for convenience.\n\nThank you,\nAleem Javed\nEpoxy Creations LLC\n(321) 328-0030`;
+
+function renderFollowUp(b) {
+  if (b.status !== 'sent') return '';
+  if (b.followUpAt) return `<span class="saved">follow-up sent ${new Date(b.followUpAt).toLocaleDateString()} to ${esc(b.followUpTo ?? '')}</span>`;
+  if (!needsFollowUp(b)) return '';
+  return `<div class="warn"><b>Bid was due ${dueDate(b).toLocaleDateString()} — time to follow up with the GC.</b>
+    <textarea id="fu-body" style="margin-top:8px;min-height:110px">${esc(followUpBody(b))}</textarea>
+    <div class="btnrow">
+      <button class="primary" onclick="sendFollowUp()">Send follow-up…</button>
+      <button class="secondary" onclick="dismissFollowUp()">Dismiss</button>
+      <span class="saved" id="fu-msg"></span>
+    </div></div>`;
+}
+
+async function sendFollowUp() {
+  const recipients = parseRecipients();
+  const b = bids[selKey];
+  if (!recipients.length) { $('#fu-msg').textContent = 'enter a recipient in the field above'; return; }
+  if (!confirm(`Send follow-up for estimate #${b.estimateNo} ("${b.project}") to:\n\n${recipients.join('\n')}\n\nThis re-attaches the proposal PDF.`)) return;
+  $('#fu-msg').textContent = 'sending…';
+  const subject = `Following up — ${b.project} — Epoxy Creations LLC`;
+  const r = await fetch('/api/bids/' + encodeURIComponent(selKey) + '/follow-up', {
+    method: 'POST',
+    body: JSON.stringify({ to: recipients.join(', '), subject, body: $('#fu-body').value }),
+  });
+  const out = await r.json();
+  if (out.sent) { bids[selKey].followUpAt = new Date().toISOString(); bids[selKey].followUpTo = recipients.join(', '); renderList(); renderPanel(); return; }
+  if (out.code === 'NO_AUTH') return sendAuthFlow();
+  $('#fu-msg').textContent = out.error ?? 'failed';
+}
+
+async function dismissFollowUp() {
+  bids[selKey] = await fetch('/api/bids/' + encodeURIComponent(selKey), { method: 'POST', body: JSON.stringify({ followUpDismissed: true }) }).then(r => r.json());
+  renderList(); renderPanel();
 }
 
 // --- per-bid AI chat ---
