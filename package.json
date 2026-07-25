@@ -13,7 +13,8 @@
     "pipeline": "node pipeline.js",
     "login": "node intake/browser.js --login",
     "intake:email": "node intake/email.js",
-    "intake:browser": "node intake/browser.js"
+    "intake:browser": "node intake/browser.js",
+    "intake:replies": "node intake/replies.js"
   },
   "dependencies": {
     "pdfkit": "^0.19.1",

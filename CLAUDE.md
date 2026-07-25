@@ -24,9 +24,16 @@ history and usage.
 
 - `server.js` — zero-framework HTTP server + JSON API; serves
   `public/index.html` (single-file UI, live-refreshes every 15s)
-- `intake/email.js` — Microsoft Graph device-code auth; groups
-  BuildingConnected notification emails into bids by rfps/<id> link +
-  fuzzy name match → `data/bids.json`
+- `intake/email.js` — Microsoft Graph device-code auth (shared helpers
+  in `intake/graph.js`); groups BuildingConnected notification emails
+  into bids by rfps/<id> link + fuzzy name match → `data/bids.json`
+- `intake/replies.js` — scans the inbox for GC replies on sent
+  proposals (exact recipient match, or same-domain + project/estimate
+  mention) → bid.gcReplies / gcReplyAt; 💬 badge in the dashboard.
+  Chained after email intake by the intake button and the pipeline
+- `pricing/rules.yaml` `costs:` — internal cost model for the margin
+  line in the quote builder (dashboard ONLY, never on proposals).
+  Seeded as DRAFT; AJ replaces with real crew/material numbers
 - `intake/browser.js` — Playwright plan downloader (attended-capable);
   auto-resumes Autodesk SSO prompts, never touches credential fields.
   Also `--set-status <label> --key <key>`: flips the bid's Bid Board

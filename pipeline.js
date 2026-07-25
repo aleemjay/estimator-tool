@@ -27,6 +27,8 @@ const saveBids = b => writeFileSync(BIDS, JSON.stringify(b, null, 2));
 step('1/4 Email intake');
 const intake = spawnSync('node', ['intake/email.js'], { cwd: ROOT, stdio: 'inherit' });
 if (intake.status !== 0) console.log('(email intake failed — continuing with existing bids)');
+const replies = spawnSync('node', ['intake/replies.js'], { cwd: ROOT, stdio: 'inherit' });
+if (replies.status !== 0) console.log('(reply scan failed — continuing)');
 
 // 2. Plan download (attended-capable browser step)
 step('2/4 Plan download from BuildingConnected');

@@ -117,7 +117,7 @@ createServer(async (req, res) => {
       if (!bids[key]) return json(res, 404, { error: 'unknown bid' });
       const patch = await readBody(req);
       // Only fields the UI owns — never let a patch clobber intake data.
-      for (const f of ['status', 'notes', 'takeoff', 'quote', 'recipients', 'followUpDismissed']) {
+      for (const f of ['status', 'notes', 'takeoff', 'quote', 'recipients', 'followUpDismissed', 'gcRepliesSeenAt']) {
         if (f in patch) bids[key][f] = patch[f];
       }
       saveBids(bids);
@@ -274,8 +274,18 @@ createServer(async (req, res) => {
       child.stdout.on('data', d => (out += d));
       child.stderr.on('data', d => (out += d));
       child.on('exit', code => {
-        const summary = out.split('\n').find(l => /new email|new project|Scanned/.test(l)) ?? out.split('\n').filter(Boolean).pop() ?? '';
-        fetchRuns.set('__intake__', { status: code === 0 ? 'done' : 'error', log: summary });
+        // Chain: after new-bid intake, scan for GC replies on sent proposals.
+        const rep = spawn('node', ['intake/replies.js'], { cwd: ROOT });
+        rep.stdout.on('data', d => (out += d));
+        rep.stderr.on('data', d => (out += d));
+        rep.on('exit', repCode => {
+          const lines = out.split('\n').filter(Boolean);
+          const summary = [
+            lines.find(l => /new email|new project|Scanned \d+ Building/.test(l)),
+            lines.find(l => /replies matched|No sent bids/.test(l)),
+          ].filter(Boolean).join(' · ') || lines.pop() || '';
+          fetchRuns.set('__intake__', { status: code === 0 && repCode === 0 ? 'done' : 'error', log: summary });
+        });
       });
       return json(res, 202, { status: 'running' });
     }

@@ -114,6 +114,27 @@ presentation:
   payment_terms: flexible # negotiated with each contractor; no rigid terms on proposals
   deposit: 500.00 # typical on small/residential direct work (Joist #417); GC bids usually none
 
+# Internal cost model (material + labor, $/unit) used ONLY for the margin
+# line in the dashboard quote builder — never printed on proposals.
+# Status: DRAFT — industry-rough numbers seeded 2026-07; AJ replaces with
+# real crew/material costs. While draft: true, the dashboard labels
+# margins as draft estimates.
+costs:
+  draft: true
+  systems: # $/sqft, all-in material + labor
+    epoxy_flake: 2.75
+    quartz: 5.50
+    urethane_cement: 6.50
+    solid_color_epoxy: 2.50
+    polished_concrete: 2.25
+    sealed_concrete: 0.90
+  cove_base: 9.00 # $/lf
+  prep: # $/sqft
+    heavy_corrective_grinding: 0.50
+    shot_blasting: 0.90
+    coating_glue_removal: 1.00
+    moisture_vapor_barrier: 2.25
+
 # Proposal boilerplate — structured to mirror Joist estimate #418 exactly:
 # title, intro, "1. System Description", "2. Proposed Scope of Work"
 # (Surface Preparation / Installation subheads), Estimated Coverage.

@@ -111,12 +111,14 @@ const isClosed = s => ['won','lost','declined','archived'].includes(s);
 // Sent bid whose due date passed 1+ days ago, not yet followed up or dismissed.
 const needsFollowUp = b => b.status === 'sent' && b.proposalFile && dueDate(b) &&
   (Date.now() - dueDate(b).getTime()) >= 86400e3 && !b.followUpAt && !b.followUpDismissed;
+// GC reply newer than the last time this bid's panel was opened.
+const hasUnseenReply = b => b.gcReplyAt && (!b.gcRepliesSeenAt || b.gcReplyAt > b.gcRepliesSeenAt);
 
 function visible() {
   return Object.entries(bids).filter(([, b]) => {
     if (filter === 'all') return true;
     if (filter === 'closed') return isClosed(b.status);
-    if (filter === 'active') return ['new', 'takeoff', 'quote', 'approved'].includes(b.status) || needsFollowUp(b);
+    if (filter === 'active') return ['new', 'takeoff', 'quote', 'approved'].includes(b.status) || needsFollowUp(b) || hasUnseenReply(b);
     if (filter === 'new') return b.status === 'new' || b.status === 'takeoff';
     if (filter === 'quote') return b.status === 'quote' || b.status === 'approved';
     if (filter === 'sent') return b.status === 'sent';
@@ -153,7 +155,7 @@ function renderList() {
     const d = dueDate(b);
     const late = d && d < now && !isClosed(b.status);
     return `<div class="row ${k === selKey ? 'sel' : ''}" onclick="select('${esc(k)}')">
-      <div class="name">${esc(b.project)}</div>
+      <div class="name">${hasUnseenReply(b) ? '💬 ' : ''}${esc(b.project)}</div>
       <div class="due ${late ? 'late' : ''}">${d ? 'due ' + d.toLocaleDateString() : ''}</div>
       ${!isClosed(b.status) ? `<button class="close-btn" title="Decline this bid" onclick="quickClose(event,'${esc(k)}','declined')">✕ decline</button>` : '<span></span>'}
       <div class="meta">${esc(b.client ?? 'GC unknown')}${b.trade ? ' · ' + esc(b.trade) : ''} · ${b.emails?.length ?? 0} email${(b.emails?.length ?? 0) === 1 ? '' : 's'}</div>
@@ -236,6 +238,11 @@ function renderPanel() {
       <div id="followup-box">${renderFollowUp(b)}</div>
       <div id="send-extra"></div>
     </div>
+    ${b.gcReplies?.length ? `<div class="section">
+      <h3>💬 GC replies (${b.gcReplies.length})</h3>
+      <div class="emails">${b.gcReplies.slice().reverse().map(r =>
+        `<div class="em"><span class="kind">${new Date(r.receivedAt).toLocaleDateString()}</span><span><b>${esc(r.fromName || r.from)}</b> — ${esc(r.subject)}${r.webLink ? ` <a href="${esc(r.webLink)}" target="_blank">open</a>` : ''}<br>${esc(r.preview)}</span></div>`).join('')}</div>
+    </div>` : ''}
     <div class="section">
       <h3>Emails (${b.emails?.length ?? 0})</h3>
       <div class="emails">${(b.emails ?? []).slice().reverse().map(e =>
@@ -493,7 +500,8 @@ async function price() {
     q.lines.map(l => `<div class="ln"><span>${esc(l.label)}</span><span>${money(l.amount)}</span></div>`).join('') +
     (q.floored ? `<div class="note">raised to job minimum</div>` : '') +
     `<div class="total"><span>Total</span><span>${money(q.total)}</span></div>` +
-    `<div class="note">Valid ${q.validityDays} days${q.notes.length ? ' · ' + q.notes.map(esc).join(' ') : ''}</div>`;
+    `<div class="note">Valid ${q.validityDays} days${q.notes.length ? ' · ' + q.notes.map(esc).join(' ') : ''}</div>` +
+    (q.margin != null ? `<div class="note" style="color:#1c7c43">internal — est. margin ${money(q.margin)} (${q.marginPct}%)${q.costsDraft ? ' · DRAFT costs, set real numbers under costs: in pricing/rules.yaml' : ''}</div>` : '');
 }
 
 function takeoffFromForm() {
@@ -517,7 +525,15 @@ async function saveBid() {
   renderList();
 }
 
-function select(k) { selKey = k; renderList(); renderPanel(); }
+function select(k) {
+  selKey = k;
+  // Opening the bid clears its 💬 unseen-reply badge.
+  if (hasUnseenReply(bids[k] ?? {})) {
+    fetch('/api/bids/' + encodeURIComponent(k), { method: 'POST', body: JSON.stringify({ gcRepliesSeenAt: new Date().toISOString() }) })
+      .then(r => r.json()).then(nb => { bids[k] = nb; renderList(); });
+  }
+  renderList(); renderPanel();
+}
 function render() { renderFilters(); renderList(); }
 
 (async () => {

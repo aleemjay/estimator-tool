@@ -67,6 +67,20 @@ export function computeQuote({ items = null, system = null, sqft = 0, coveLf = 0
     RULES.job_rules.minimum_contract
   );
 
+  // Internal margin from the cost model (dashboard only — proposals never
+  // print cost/margin; generate.js reads only `lines` and `total`).
+  const C = RULES.costs;
+  let cost = null;
+  if (C?.systems) {
+    cost = 0;
+    for (const l of lines) {
+      if (l.kind === 'system') cost += (C.systems[l.key] ?? 0) * l.sqft;
+      if (l.kind === 'cove') cost += (C.cove_base ?? 0) * coveLf;
+      if (l.kind === 'prep') cost += (C.prep?.[l.key] ?? 0) * sqft;
+    }
+    cost = Math.round(cost * 100) / 100;
+  }
+
   return {
     lines,
     subtotal,
@@ -74,6 +88,10 @@ export function computeQuote({ items = null, system = null, sqft = 0, coveLf = 0
     total,
     notes,
     validityDays: RULES.presentation.quote_validity_days,
+    cost,
+    margin: cost != null ? Math.round((total - cost) * 100) / 100 : null,
+    marginPct: cost != null && total > 0 ? Math.round(((total - cost) / total) * 100) : null,
+    costsDraft: !!C?.draft,
   };
 }
 
