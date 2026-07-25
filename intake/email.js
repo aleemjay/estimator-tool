@@ -14,6 +14,7 @@
 
 import { readFileSync, writeFileSync, existsSync, mkdirSync } from 'node:fs';
 import { GRAPH, loadEnv, getToken, htmlToText } from './graph.js';
+import { loadDirectSenders, directClient } from './direct.js';
 
 const DAYS = process.argv.includes('--days')
   ? Number(process.argv[process.argv.indexOf('--days') + 1])
@@ -111,6 +112,7 @@ const env = loadEnv();
 const tokens = await getToken(env, 'Mail.Read offline_access');
 const since = new Date(Date.now() - DAYS * 24 * 60 * 60 * 1000).toISOString();
 const bids = loadBids(); // keyed by opportunity id (or normalized name)
+const DIRECT_SENDERS = loadDirectSenders(); // GCs who email invites directly
 let found = 0, newEmails = 0, newProjects = 0;
 
 let url =
@@ -124,8 +126,11 @@ while (url) {
   const page = await res.json();
   for (const msg of page.value ?? []) {
     const sender = msg.from?.emailAddress?.address ?? '';
-    if (!/buildingconnected\.com$/i.test(sender)) continue;
+    const direct = directClient(sender, DIRECT_SENDERS);
+    if (!/buildingconnected\.com$/i.test(sender) && !direct) continue;
     found++;
+    msg._direct = direct; // GC display name when from a direct-GC sender
+    msg._sender = sender;
     emails.push(msg);
   }
   url = page['@odata.nextLink'] ?? null;
@@ -147,6 +152,13 @@ for (const msg of emails) {
 
   const f = parseFields(msg.subject ?? '', text, html);
   const kind = classify(msg.subject ?? '');
+  if (msg._direct) {
+    // Direct-GC email: the BC body patterns won't parse; the senders map
+    // supplies the client, and replies should go to the sender.
+    f.client = f.client ?? msg._direct;
+    f.contactEmail = msg._sender;
+    f.rfpId = null; // never group direct emails by a BC link someone forwarded
+  }
 
   // Find the project this email belongs to: by RFP id (as key or stored
   // field), then by truncation-tolerant name similarity.
@@ -168,7 +180,7 @@ for (const msg of emails) {
   if (!key) {
     key = f.rfpId ?? emailId;
     bids[key] = {
-      source: 'email',
+      source: msg._direct ? 'email-direct' : 'email',
       project: name,
       trade: f.trade,
       client: f.client,

@@ -26,7 +26,10 @@ history and usage.
   `public/index.html` (single-file UI, live-refreshes every 15s)
 - `intake/email.js` — Microsoft Graph device-code auth (shared helpers
   in `intake/graph.js`); groups BuildingConnected notification emails
-  into bids by rfps/<id> link + fuzzy name match → `data/bids.json`
+  into bids by rfps/<id> link + fuzzy name match → `data/bids.json`.
+  Also accepts direct-GC senders listed in `data/direct-senders.json`
+  (machine-local, gitignored — GC contact info never in git); keys are
+  address or domain, values the GC display name (`intake/direct.js`)
 - `intake/replies.js` — scans the inbox for GC replies on sent
   proposals (exact recipient match, or same-domain + project/estimate
   mention) → bid.gcReplies / gcReplyAt; 💬 badge in the dashboard.
