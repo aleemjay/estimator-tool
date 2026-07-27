@@ -34,7 +34,7 @@ export function computeQuote({ items = null, system = null, sqft = 0, coveLf = 0
     if (!itSqft) continue;
     const rate = it.rateOverride > 0 ? it.rateOverride : tierRate(sys.tiers, itSqft);
     totalSqft += itSqft;
-    lines.push({ label: `${sys.label} — ${itSqft.toLocaleString()} sq ft @ $${rate.toFixed(2)}`, amount: itSqft * rate, kind: 'system', key: it.system, sqft: itSqft });
+    lines.push({ label: `${sys.label} — ${itSqft.toLocaleString()} sq ft @ $${rate.toFixed(2)}`, amount: itSqft * rate, kind: 'system', key: it.system, sqft: itSqft, areaNote: it.areaNote?.trim() || null });
   }
   if (!lines.length) throw new Error('no system items with sq ft');
 

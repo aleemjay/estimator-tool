@@ -125,7 +125,7 @@ export function generateProposal(bid, quote, takeoff, estimateNo) {
       y += 5;
 
       subhead('Estimated Coverage:');
-      para(`- Total Project SQFT: ${(l.sqft ?? totalSqft).toLocaleString()}`);
+      para(`- Total Project SQFT: ${(l.sqft ?? totalSqft).toLocaleString()}${l.areaNote ? ` (${l.areaNote})` : ''}`);
       if (hasCove && systemLines.length === 1) para(`- Total Linear Feet: ${takeoff.coveLf.toLocaleString()}`);
       y += 2;
       if (l === systemLines[systemLines.length - 1]) {
