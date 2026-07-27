@@ -39,9 +39,11 @@ history and usage.
   Seeded as DRAFT; AJ replaces with real crew/material numbers
 - `intake/browser.js` — Playwright plan downloader (attended-capable);
   auto-resumes Autodesk SSO prompts, never touches credential fields.
-  Also `--set-status <label> --key <key>`: flips the bid's Bid Board
-  status on BC (server triggers it with "Bidding" after each send;
-  records bcStatus/bcStatusFailed on the bid)
+  Also `--set-status <label> --key <key>` (flip Bid Board status) and
+  `--log-bid --key <key>`: fills BC's Bid Form (quote value, estimate
+  note, proposal PDF), clicks Log Bid — NEVER "Send your bid" — and
+  marks Submitted. The server runs --log-bid after each send; records
+  bcStatus/bcBidLoggedAt/bcStatusFailed on the bid
 - `takeoff/run.js` — headless `claude -p` reads plan PDFs in
   `data/plans/<key>/`, returns items[] (one per system), terse
   scope/not-scope, judgment calls (~$1/run, uses AJ's Claude login)

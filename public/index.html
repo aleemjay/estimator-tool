@@ -391,15 +391,15 @@ async function genProposal() {
 // this line shows the outcome and offers retry / manual trigger.
 function renderBcLine(b) {
   if (!(b.rfpId || b.link)) return '';
-  if (b.bcStatus) return `BuildingConnected: marked “${esc(b.bcStatus)}” ✓`;
-  if (b.bcStatusFailed) return `BuildingConnected status update failed <button class="secondary" style="padding:3px 9px;font-size:12px" onclick="markBidding()">retry</button> <span>${esc(b.bcStatusFailed)}</span>`;
-  if (b.status === 'sent') return `<button class="secondary" style="padding:3px 9px;font-size:12px" onclick="markBidding()">mark “Bidding” on BuildingConnected</button>`;
+  if (b.bcStatus) return `BuildingConnected: ${b.bcBidLoggedAt ? 'bid logged, ' : ''}marked “${esc(b.bcStatus)}” ✓`;
+  if (b.bcStatusFailed) return `BuildingConnected update failed <button class="secondary" style="padding:3px 9px;font-size:12px" onclick="markBidding()">retry</button> <span>${esc(b.bcStatusFailed)}</span>`;
+  if (b.status === 'sent') return `<button class="secondary" style="padding:3px 9px;font-size:12px" onclick="markBidding()">log bid + mark “Submitted” on BuildingConnected</button>`;
   return '';
 }
 
 async function markBidding() {
   const r = await fetch('/api/bids/' + encodeURIComponent(selKey) + '/bc-status', { method: 'POST' }).then(r => r.json());
-  $('#bc-line').textContent = r.error ?? 'updating BuildingConnected status to “Bidding”… (a browser window may open on the Mac)';
+  $('#bc-line').textContent = r.error ?? 'updating BuildingConnected… (a browser window may open on the Mac)';
 }
 
 // --- create a bid from scratch (direct-GC invites, phone calls, gov RFPs) ---
@@ -530,7 +530,7 @@ async function sendToGC() {
   if (out.sent) {
     $('#send-msg').textContent = 'sent ✓';
     bids[selKey].status = 'sent';
-    if (out.bcUpdating) $('#bc-line').textContent = 'updating BuildingConnected status to “Bidding”…';
+    if (out.bcUpdating) $('#bc-line').textContent = 'logging bid on BuildingConnected (value, proposal PDF, Submitted)…';
     renderList();
     return;
   }

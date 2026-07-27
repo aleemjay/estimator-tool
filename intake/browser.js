@@ -13,6 +13,11 @@
 //   node intake/browser.js --login    # one-time sign-in only (waits 30 min)
 //   node intake/browser.js --set-status Bidding --key <bidKey>
 //                                     # flip the bid's Bid Board status on BC
+//   node intake/browser.js --log-bid --key <bidKey>
+//                                     # fill BC's Bid Form (value, notes,
+//                                     # proposal PDF), Log Bid, status
+//                                     # Submitted. Never "Send your bid" —
+//                                     # delivery stays via our own email.
 
 import { chromium } from 'playwright';
 import { readFileSync, writeFileSync, existsSync, mkdirSync, readdirSync } from 'node:fs';
@@ -30,10 +35,11 @@ const onlyKey = process.argv.includes('--key') ? process.argv[process.argv.index
 const loginOnly = process.argv.includes('--login');
 const includeOverdue = process.argv.includes('--include-overdue');
 const setStatusTo = process.argv.includes('--set-status') ? process.argv[process.argv.indexOf('--set-status') + 1] : null;
+const logBid = process.argv.includes('--log-bid');
 
 const bids = JSON.parse(readFileSync(BIDS, 'utf8'));
 let skippedOverdue = 0;
-const targets = (loginOnly || setStatusTo) ? [] : Object.entries(bids).filter(([key, b]) => {
+const targets = (loginOnly || setStatusTo || logBid) ? [] : Object.entries(bids).filter(([key, b]) => {
   if (onlyKey) return key === onlyKey;
   if (CLOSED.has(b.status)) return false;
   if (!b.rfpId && !b.link) return false;
@@ -50,7 +56,7 @@ if (skippedOverdue) console.log(`(skipping ${skippedOverdue} past-due bid(s) —
 // Resolve the --set-status target bid (by --key, or --project name match)
 // BEFORE opening a browser window, so bad input fails fast.
 let statusKey = null;
-if (setStatusTo) {
+if (setStatusTo || logBid) {
   const proj = process.argv.includes('--project') ? process.argv[process.argv.indexOf('--project') + 1] : null;
   if (onlyKey && bids[onlyKey]) {
     statusKey = onlyKey;
@@ -70,14 +76,14 @@ if (setStatusTo) {
     console.log('Known bids:', Object.keys(bids).join(', '));
     process.exit(1);
   }
-  console.log(`Target: ${bids[statusKey].project} (${statusKey}) -> "${setStatusTo}"`);
+  console.log(`Target: ${bids[statusKey].project} (${statusKey}) -> ${logBid ? 'log bid + Submitted' : `"${setStatusTo}"`}`);
 }
 
-if (!loginOnly && !setStatusTo && !targets.length) {
+if (!loginOnly && !setStatusTo && !logBid && !targets.length) {
   console.log('No bids need plan fetching.');
   process.exit(0);
 }
-if (!loginOnly && !setStatusTo) console.log(`Fetching plans for ${targets.length} bid(s)...`);
+if (!loginOnly && !setStatusTo && !logBid) console.log(`Fetching plans for ${targets.length} bid(s)...`);
 
 const ctx = await chromium.launchPersistentContext(join(ROOT, 'data/browser-profile'), {
   headless: false,
@@ -173,7 +179,7 @@ async function fetchPlans(key, bid) {
 
 // The Bid Board status control on an opportunity page shows the current
 // state (Undecided / Bidding / Declined / ...) and opens a menu of states.
-const BC_STATES = /undecided|considering|bidding|not bidding|declined|submitted|won|lost/i;
+const BC_STATES = /undecided|accepted|considering|bidding|not bidding|declined|submitted|won|lost/i;
 
 async function setBcStatus(bid, statusLabel) {
   const url = bid.rfpId ? `https://app.buildingconnected.com/rfps/${bid.rfpId}` : bid.link;
@@ -195,6 +201,42 @@ async function setBcStatus(bid, statusLabel) {
   if (!shown) throw new Error(`clicked "${statusLabel}" but the status control does not show it`);
 }
 
+// Fill BuildingConnected's Bid Form for a sent bid: quote value, estimate
+// note, proposal PDF attachment, then "Log Bid" (records it on OUR Bid
+// Board only — never the "Send your bid" path; the GC gets our email).
+async function logBidForm(bid) {
+  const url = bid.link ?? (bid.rfpId ? `https://app.buildingconnected.com/rfps/${bid.rfpId}` : null);
+  if (!url) throw new Error('bid has no BuildingConnected link');
+  await gotoAuthed(url);
+  const tab = page.getByRole('tab', { name: /bid form/i }).or(page.getByText(/^Bid Form$/));
+  await tab.first().click({ timeout: 30000 });
+  await page.waitForTimeout(2500);
+
+  const total = bid.quote?.total;
+  if (total > 0) {
+    const value = page.getByLabel(/value/i)
+      .or(page.locator('input:right-of(:text("Value"))'))
+      .or(page.locator('input[type="text"], input[type="number"]')).first();
+    await value.fill(String(total), { timeout: 15000 });
+  }
+
+  const notes = page.locator('[contenteditable="true"]').first();
+  if (await notes.isVisible().catch(() => false)) {
+    await notes.fill(`Estimate #${bid.estimateNo ?? ''} — proposal emailed to ${bid.sentTo ?? 'the GC'} — Epoxy Creations LLC`).catch(() => {});
+  }
+
+  const pdf = bid.proposalFile ? join(ROOT, 'proposals', bid.proposalFile) : null;
+  if (pdf && existsSync(pdf)) {
+    const attached = await page.locator('input[type="file"]').first()
+      .setInputFiles(pdf, { timeout: 15000 }).then(() => true, () => false);
+    if (attached) await page.waitForTimeout(4000); // let the upload finish
+    else console.log('(could not attach the proposal PDF — attach it manually on BC)');
+  }
+
+  await page.getByRole('button', { name: /^log bid$/i }).first().click({ timeout: 15000 });
+  await page.waitForTimeout(3000);
+}
+
 await ensureLoggedIn();
 if (loginOnly) {
   console.log('Session saved. Plan fetching is now fully automatic — close this window or it closes itself.');
@@ -213,12 +255,21 @@ function recordFetchResult(key, patch) {
   writeFileSync(BIDS, JSON.stringify(fresh, null, 2));
 }
 
-if (setStatusTo) {
+if (setStatusTo || logBid) {
   const bid = bids[statusKey];
   try {
-    await setBcStatus(bid, setStatusTo);
-    recordFetchResult(statusKey, { bcStatus: setStatusTo, bcStatusAt: new Date().toISOString() });
-    console.log(`BC status set to "${setStatusTo}" for ${bid.project}`);
+    if (logBid) {
+      await logBidForm(bid);
+      // Logging usually flips BC to Submitted on its own; setBcStatus's
+      // already-set check makes this a cheap verify-or-fix.
+      await setBcStatus(bid, 'Submitted');
+      recordFetchResult(statusKey, { bcStatus: 'Submitted', bcStatusAt: new Date().toISOString(), bcBidLoggedAt: new Date().toISOString() });
+      console.log(`BC bid logged ($${bid.quote?.total ?? 0}) and marked Submitted for ${bid.project}`);
+    } else {
+      await setBcStatus(bid, setStatusTo);
+      recordFetchResult(statusKey, { bcStatus: setStatusTo, bcStatusAt: new Date().toISOString() });
+      console.log(`BC status set to "${setStatusTo}" for ${bid.project}`);
+    }
     await ctx.close();
     process.exit(0);
   } catch (e) {

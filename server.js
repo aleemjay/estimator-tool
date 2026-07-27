@@ -51,11 +51,16 @@ function startTakeoffRun(key) {
 // (browser session — the API route stays 403 until paid Bid Board Pro).
 // Fire-and-forget: the script records bcStatus/bcStatusFailed on the bid.
 const bcRuns = new Map(); // bidKey -> {status:'running'|'done'|'error', error?}
-function startBcStatusRun(key, statusLabel = 'Bidding') {
+// mode 'log' fills BC's Bid Form (value, notes, proposal PDF) and marks
+// Submitted; otherwise flips the status to statusLabel.
+function startBcStatusRun(key, statusLabel = 'Bidding', mode = 'status') {
   if (bcRuns.get(key)?.status === 'running') return false;
   bcRuns.set(key, { status: 'running', startedAt: Date.now() });
   let out = '';
-  const child = spawn('node', ['intake/browser.js', '--set-status', statusLabel, '--key', key], { cwd: ROOT });
+  const args = mode === 'log'
+    ? ['intake/browser.js', '--log-bid', '--key', key]
+    : ['intake/browser.js', '--set-status', statusLabel, '--key', key];
+  const child = spawn('node', args, { cwd: ROOT });
   child.stdout.on('data', d => (out += d));
   child.stderr.on('data', d => (out += d));
   child.on('exit', code => {
@@ -205,7 +210,9 @@ createServer(async (req, res) => {
       if (action === 'bc-status') {
         if (req.method === 'POST') {
           if (!bids[key].rfpId && !bids[key].link) return json(res, 400, { error: 'bid has no BuildingConnected link' });
-          if (!startBcStatusRun(key)) return json(res, 409, { error: 'update already running' });
+          // Sent bids get the full bid-log (form + Submitted); unsent just flip status.
+          const mode = bids[key].sentAt ? 'log' : 'status';
+          if (!startBcStatusRun(key, 'Bidding', mode)) return json(res, 409, { error: 'update already running' });
           return json(res, 202, { status: 'running' });
         }
         return json(res, 200, bcRuns.get(key) ?? { status: 'idle' });
@@ -371,7 +378,7 @@ createServer(async (req, res) => {
         bid.sentTo = recipients.join(', ');
         bid.recipients = recipients;
         saveBids(bids);
-        const bcUpdating = (bid.rfpId || bid.link) ? startBcStatusRun(key) : false;
+        const bcUpdating = (bid.rfpId || bid.link) ? startBcStatusRun(key, 'Bidding', 'log') : false;
         return json(res, 200, { sent: true, bcUpdating });
       } catch (e) {
         return json(res, e.code === 'NO_AUTH' ? 401 : e.code === 'NO_PERMISSION' ? 403 : 500, { error: e.message, code: e.code ?? null });
