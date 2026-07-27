@@ -19,6 +19,8 @@
   header { display: flex; align-items: center; gap: 14px; padding: 18px 26px 10px; }
   header h1 { font-size: 20px; margin: 0; }
   header .sub { color: var(--muted); font-size: 13px; }
+  header #q-search { font: inherit; font-size: 13.5px; border: 1px solid var(--line); border-radius: 999px; padding: 6px 14px; width: min(280px, 34vw); background: var(--card); }
+  header #q-search:focus { outline: none; border-color: var(--accent); }
   .filters { padding: 0 26px 12px; display: flex; gap: 8px; flex-wrap: wrap; }
   .filters button { border: 1px solid var(--line); background: var(--card); border-radius: 999px; padding: 5px 14px; font-size: 13px; cursor: pointer; color: var(--muted); }
   .filters button.on { background: var(--ink); color: #fff; border-color: var(--ink); }
@@ -89,6 +91,9 @@
   <h1>EpoxyCreations Estimator</h1>
   <span class="sub" id="counts"></span>
   <span style="flex:1"></span>
+  <input type="search" id="q-search" placeholder="Search bids — project, GC, city, est #, system…"
+    oninput="search=this.value;render()" onkeydown="if(event.key==='Escape'){this.value='';search='';render()}">
+
   <button class="secondary" id="btn-intake" onclick="runJob('intake')">Fetch new bids</button>
   <button class="primary" id="btn-pipeline" onclick="runJob('pipeline')">Run pipeline</button>
 </header>
@@ -101,7 +106,22 @@
 <script>
 const STATUSES = ['new','takeoff','quote','approved','sent','won','lost','declined','archived'];
 const FILTERS = ['active','new','quote','sent','closed','all'];
-let bids = {}, rules = {}, selKey = null, filter = 'active';
+let bids = {}, rules = {}, selKey = null, filter = 'active', search = '';
+
+// Everything searchable about a bid, flattened. Multi-word queries must
+// match every word somewhere (e.g. "csg naples flake" or "estimate 423").
+function bidHaystack(b) {
+  return [
+    b.project, b.client, b.lead, b.location, b.trade, b.status, b.notes,
+    b.contactEmail, b.contactPhone, b.sentTo, ...(b.recipients ?? []),
+    b.estimateNo ? `#${b.estimateNo} ${b.estimateNo}` : '',
+    b.quote?.total != null ? '$' + b.quote.total : '',
+    ...(b.takeoff?.items ?? []).map(it => it.system),
+    ...(b.emails ?? []).map(e => e.subject),
+    ...(b.gcReplies ?? []).map(r => `${r.subject} ${r.preview} ${r.from} ${r.fromName}`),
+    b.aiTakeoff?.execSummary, b.aiTakeoff?.scope,
+  ].filter(Boolean).join(' ').toLowerCase();
+}
 
 const $ = s => document.querySelector(s);
 const esc = s => (s ?? '').replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
@@ -115,6 +135,15 @@ const needsFollowUp = b => b.status === 'sent' && b.proposalFile && dueDate(b) &
 const hasUnseenReply = b => b.gcReplyAt && (!b.gcRepliesSeenAt || b.gcReplyAt > b.gcRepliesSeenAt);
 
 function visible() {
+  // A search spans ALL bids regardless of the status filter — hunting a
+  // bid shouldn't depend on remembering which state it's in.
+  const q = search.trim().toLowerCase();
+  if (q) {
+    const tokens = q.split(/\s+/);
+    return Object.entries(bids)
+      .filter(([, b]) => { const h = bidHaystack(b); return tokens.every(t => h.includes(t)); })
+      .sort((a, b) => (dueDate(a[1]) ?? new Date('2100-01-01')) - (dueDate(b[1]) ?? new Date('2100-01-01')));
+  }
   return Object.entries(bids).filter(([, b]) => {
     if (filter === 'all') return true;
     if (filter === 'closed') return isClosed(b.status);
@@ -150,7 +179,7 @@ async function archiveOverdue() {
 function renderList() {
   const rows = visible();
   const now = new Date();
-  $('#counts').textContent = `${rows.length} bid${rows.length === 1 ? '' : 's'}`;
+  $('#counts').textContent = `${rows.length} bid${rows.length === 1 ? '' : 's'}${search.trim() ? ' matching' : ''}`;
   $('#list').innerHTML = rows.length ? rows.map(([k, b]) => {
     const d = dueDate(b);
     const late = d && d < now && !isClosed(b.status);
