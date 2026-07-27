@@ -167,7 +167,14 @@ for (const msg of emails) {
     ? (bids[f.rfpId] ? f.rfpId : Object.keys(bids).find(k => bids[k].rfpId === f.rfpId) ?? null)
     : null;
   if (!key) {
-    key = Object.keys(bids).find(k => nameMatch(bids[k].project, name)) ?? null;
+    // Fuzzy name match — but never merge into a bid whose stored RFP id
+    // differs from this email's: chain projects (e.g. Walmart Supercenter
+    // stores) share nearly every name token and only the rfps/<id> link
+    // tells them apart.
+    key = Object.keys(bids).find(k =>
+      nameMatch(bids[k].project, name) &&
+      !(f.rfpId && bids[k].rfpId && bids[k].rfpId !== f.rfpId)
+    ) ?? null;
   }
 
   // Learned the RFP id for a project created before we saw it? Re-key.
