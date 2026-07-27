@@ -206,6 +206,7 @@ for (const msg of emails) {
   }
 
   const bid = bids[key];
+  bid.emails ??= []; // manually-created bids (dashboard/session) have none
   if (bid.emails.some(e => e.id === emailId)) continue;
   newEmails++;
   bid.emails.push({
@@ -232,6 +233,6 @@ const projects = Object.values(bids);
 console.log(`Scanned ${found} BuildingConnected email(s) from the last ${DAYS} days.`);
 console.log(`${newEmails} new email(s); ${newProjects} new project(s); ${projects.length} total in data/bids.json:\n`);
 for (const b of projects) {
-  console.log(`  • ${b.project}${b.client ? `  [${b.client}]` : ''}${b.due ? `  due ${b.due}` : ''}  (${b.emails.length} email${b.emails.length === 1 ? '' : 's'})`);
+  console.log(`  • ${b.project}${b.client ? `  [${b.client}]` : ''}${b.due ? `  due ${b.due}` : ''}  (${b.emails?.length ?? 0} email${(b.emails?.length ?? 0) === 1 ? '' : 's'})`);
 }
 if (DUMP) console.log('\nRaw copies saved to data/raw/ for parser tuning.');
