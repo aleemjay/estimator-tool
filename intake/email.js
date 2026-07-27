@@ -60,13 +60,15 @@ function parseFields(subject, text, html) {
   const contactEmail = text.match(/[\w.+-]+@[\w.-]+\.[a-z]{2,}/i)?.[0] ?? null;
   const contactPhone = text.match(/\+1[\s\d()-]{10,}/)?.[0]?.trim() ?? null;
 
-  // Every notification links to the RFP (https://app.buildingconnected.com/
-  // rfps/<24-hex>/bid) — the stable per-project key for grouping.
+  // Notifications link the project as rfps/<24-hex> — and some (e.g. the
+  // Walmart #7219 invite, 2026-07) as opportunities/<24-hex> instead. Both
+  // are stable per-project ids; extract whichever is present for grouping.
   const links = [...(html ?? '').matchAll(/https:\/\/app\.buildingconnected\.com[^\s"'<>)]*/g)].map(m => m[0]);
   const rfpId = links.map(l => l.match(/rfps\/([a-f0-9]{24})/i)?.[1]).find(Boolean) ?? null;
-  const link = links.find(l => /rfps\/[a-f0-9]{24}/i.test(l)) ?? links[0] ?? null;
+  const oppId = links.map(l => l.match(/opportunities\/([a-f0-9]{24})/i)?.[1]).find(Boolean) ?? null;
+  const link = links.find(l => /(?:rfps|opportunities)\/[a-f0-9]{24}/i.test(l)) ?? links[0] ?? null;
 
-  return { project, trade, client, lead, location, due, contactEmail, contactPhone, rfpId, link };
+  return { project, trade, client, lead, location, due, contactEmail, contactPhone, rfpId, oppId, link };
 }
 
 // Notification boilerplate words that carry no project identity.
@@ -166,14 +168,18 @@ for (const msg of emails) {
   let key = f.rfpId
     ? (bids[f.rfpId] ? f.rfpId : Object.keys(bids).find(k => bids[k].rfpId === f.rfpId) ?? null)
     : null;
+  if (!key && f.oppId) {
+    key = bids[f.oppId] ? f.oppId : Object.keys(bids).find(k => bids[k].oppId === f.oppId) ?? null;
+  }
   if (!key) {
-    // Fuzzy name match — but never merge into a bid whose stored RFP id
-    // differs from this email's: chain projects (e.g. Walmart Supercenter
-    // stores) share nearly every name token and only the rfps/<id> link
-    // tells them apart.
+    // Fuzzy name match — but never merge into a bid carrying a DIFFERENT
+    // project id (rfp or opportunity): chain projects (e.g. Walmart
+    // Supercenter stores) share nearly every name token and only the
+    // linked id tells them apart.
     key = Object.keys(bids).find(k =>
       nameMatch(bids[k].project, name) &&
-      !(f.rfpId && bids[k].rfpId && bids[k].rfpId !== f.rfpId)
+      !(f.rfpId && bids[k].rfpId && bids[k].rfpId !== f.rfpId) &&
+      !(f.oppId && bids[k].oppId && bids[k].oppId !== f.oppId)
     ) ?? null;
   }
 
@@ -185,7 +191,7 @@ for (const msg of emails) {
   }
 
   if (!key) {
-    key = f.rfpId ?? emailId;
+    key = f.rfpId ?? f.oppId ?? emailId;
     bids[key] = {
       source: msg._direct ? 'email-direct' : 'email',
       project: name,
