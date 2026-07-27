@@ -94,6 +94,7 @@
   <input type="search" id="q-search" placeholder="Search bids — project, GC, city, est #, system…"
     oninput="search=this.value;render()" onkeydown="if(event.key==='Escape'){this.value='';search='';render()}">
 
+  <button class="secondary" onclick="newBidForm()">+ New bid</button>
   <button class="secondary" id="btn-intake" onclick="runJob('intake')">Fetch new bids</button>
   <button class="primary" id="btn-pipeline" onclick="runJob('pipeline')">Run pipeline</button>
 </header>
@@ -105,7 +106,7 @@
 </main>
 <script>
 const STATUSES = ['new','takeoff','quote','approved','sent','won','lost','declined','archived'];
-const FILTERS = ['active','new','quote','sent','closed','all'];
+const FILTERS = ['active','new','quote','sent','followed up','closed','all'];
 let bids = {}, rules = {}, selKey = null, filter = 'active', search = '';
 
 // Everything searchable about a bid, flattened. Multi-word queries must
@@ -151,6 +152,7 @@ function visible() {
     if (filter === 'new') return b.status === 'new' || b.status === 'takeoff';
     if (filter === 'quote') return b.status === 'quote' || b.status === 'approved';
     if (filter === 'sent') return b.status === 'sent';
+    if (filter === 'followed up') return !!b.followUpAt;
   }).sort((a, b) => (dueDate(a[1]) ?? new Date('2100-01-01')) - (dueDate(b[1]) ?? new Date('2100-01-01')));
 }
 
@@ -398,6 +400,41 @@ function renderBcLine(b) {
 async function markBidding() {
   const r = await fetch('/api/bids/' + encodeURIComponent(selKey) + '/bc-status', { method: 'POST' }).then(r => r.json());
   $('#bc-line').textContent = r.error ?? 'updating BuildingConnected status to “Bidding”… (a browser window may open on the Mac)';
+}
+
+// --- create a bid from scratch (direct-GC invites, phone calls, gov RFPs) ---
+function newBidForm() {
+  selKey = null;
+  renderList();
+  $('#panel').innerHTML = `
+    <h2>New bid</h2>
+    <div class="client">For invites that arrive outside BuildingConnected — direct GC emails, phone calls, government portals.</div>
+    <div class="sendgrid">
+      <input type="text" id="nb-project" placeholder="Project name * (e.g. Publix #1234 Remodel - Tampa, FL)">
+      <input type="text" id="nb-client" placeholder="GC / client (prints on the proposal)">
+      <input type="text" id="nb-lead" placeholder="Contact person">
+      <input type="text" id="nb-email" placeholder="Contact email">
+      <input type="text" id="nb-phone" placeholder="Contact phone">
+      <input type="text" id="nb-location" placeholder="Project location">
+      <input type="text" id="nb-due" placeholder="Bid due date (e.g. Aug 15, 2026)">
+      <input type="text" id="nb-link" placeholder="Plan room link (optional)">
+    </div>
+    <div class="btnrow">
+      <button class="primary" onclick="createBid()">Create bid</button>
+      <button class="secondary" onclick="renderPanel()">Cancel</button>
+      <span class="saved" id="nb-msg"></span>
+    </div>`;
+}
+
+async function createBid() {
+  const val = id => document.getElementById(id).value.trim();
+  const body = { project: val('nb-project'), client: val('nb-client'), lead: val('nb-lead'),
+    contactEmail: val('nb-email'), contactPhone: val('nb-phone'), location: val('nb-location'),
+    due: val('nb-due'), link: val('nb-link') };
+  const r = await fetch('/api/bids', { method: 'POST', body: JSON.stringify(body) }).then(r => r.json());
+  if (r.error) { $('#nb-msg').textContent = r.error; return; }
+  bids[r.key] = r.bid;
+  select(r.key);
 }
 
 // --- post-due follow-up ---

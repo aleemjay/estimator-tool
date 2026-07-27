@@ -100,6 +100,27 @@ createServer(async (req, res) => {
     if (url.pathname === '/api/bids' && req.method === 'GET') {
       return json(res, 200, loadBids());
     }
+    // Create a bid from scratch (dashboard "+ New bid" form).
+    if (url.pathname === '/api/bids' && req.method === 'POST') {
+      const f = await readBody(req);
+      const project = (f.project ?? '').trim();
+      if (!project) return json(res, 400, { error: 'project name is required' });
+      const bids = loadBids();
+      const base = planSlug(project) || `manual-${Date.now()}`;
+      let key = base, n = 2;
+      while (bids[key]) key = `${base}-${n++}`;
+      const clean = v => (typeof v === 'string' && v.trim()) ? v.trim() : null;
+      bids[key] = {
+        project,
+        client: clean(f.client), lead: clean(f.lead),
+        contactEmail: clean(f.contactEmail), contactPhone: clean(f.contactPhone),
+        location: clean(f.location), due: clean(f.due), link: clean(f.link),
+        status: 'new', source: 'manual', emails: [],
+        createdAt: new Date().toISOString(),
+      };
+      saveBids(bids);
+      return json(res, 200, { key, bid: bids[key] });
+    }
     if (url.pathname === '/api/rules' && req.method === 'GET') {
       return json(res, 200, {
         systems: Object.fromEntries(Object.entries(RULES.systems).map(([k, v]) => [k, v.label])),
