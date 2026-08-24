@@ -355,7 +355,7 @@ createServer(async (req, res) => {
         saveBids(bids);
         return json(res, 200, { sent: true });
       } catch (e) {
-        return json(res, e.code === 'NO_AUTH' ? 401 : e.code === 'NO_PERMISSION' ? 403 : 500, { error: e.message, code: e.code ?? null });
+        return json(res, e.code === 'NO_AUTH' ? 401 : e.code === 'NO_PERMISSION' ? 403 : e.code === 'NO_PDF' ? 400 : 500, { error: e.message, code: e.code ?? null });
       }
     }
 
@@ -381,7 +381,7 @@ createServer(async (req, res) => {
         const bcUpdating = (bid.rfpId || bid.link) ? startBcStatusRun(key, 'Bidding', 'log') : false;
         return json(res, 200, { sent: true, bcUpdating });
       } catch (e) {
-        return json(res, e.code === 'NO_AUTH' ? 401 : e.code === 'NO_PERMISSION' ? 403 : 500, { error: e.message, code: e.code ?? null });
+        return json(res, e.code === 'NO_AUTH' ? 401 : e.code === 'NO_PERMISSION' ? 403 : e.code === 'NO_PDF' ? 400 : 500, { error: e.message, code: e.code ?? null });
       }
     }
 

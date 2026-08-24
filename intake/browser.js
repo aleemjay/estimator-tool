@@ -205,19 +205,32 @@ async function setBcStatus(bid, statusLabel) {
 // note, proposal PDF attachment, then "Log Bid" (records it on OUR Bid
 // Board only — never the "Send your bid" path; the GC gets our email).
 async function logBidForm(bid) {
+  // Label each step so a timeout says WHICH control was not found.
+  const step = async (name, fn) => {
+    try { return await fn(); }
+    catch (e) { throw new Error(`[step: ${name}] ${e.message.split('\n')[0]}`); }
+  };
+
   const url = bid.link ?? (bid.rfpId ? `https://app.buildingconnected.com/rfps/${bid.rfpId}` : null);
   if (!url) throw new Error('bid has no BuildingConnected link');
   await gotoAuthed(url);
-  const tab = page.getByRole('tab', { name: /bid form/i }).or(page.getByText(/^Bid Form$/));
-  await tab.first().click({ timeout: 30000 });
-  await page.waitForTimeout(2500);
+  await step('open Bid Form tab', async () => {
+    const tab = page.getByRole('tab', { name: /bid form/i })
+      .or(page.getByRole('link', { name: /bid form/i }))
+      .or(page.getByText(/^Bid Form$/));
+    await tab.first().click({ timeout: 30000 });
+    await page.waitForTimeout(3000);
+  });
 
   const total = bid.quote?.total;
   if (total > 0) {
-    const value = page.getByLabel(/value/i)
-      .or(page.locator('input:right-of(:text("Value"))'))
-      .or(page.locator('input[type="text"], input[type="number"]')).first();
-    await value.fill(String(total), { timeout: 15000 });
+    await step('fill Value', async () => {
+      const value = page.getByLabel(/value/i)
+        .or(page.locator('input:right-of(:text("Value"))'))
+        .or(page.locator('input[type="text"], input[type="number"]')).first();
+      await value.waitFor({ state: 'visible', timeout: 20000 });
+      await value.fill(String(total), { timeout: 15000 });
+    });
   }
 
   const notes = page.locator('[contenteditable="true"]').first();
@@ -233,8 +246,10 @@ async function logBidForm(bid) {
     else console.log('(could not attach the proposal PDF — attach it manually on BC)');
   }
 
-  await page.getByRole('button', { name: /^log bid$/i }).first().click({ timeout: 15000 });
-  await page.waitForTimeout(3000);
+  await step('click Log Bid', async () => {
+    await page.getByRole('button', { name: /^log bid$/i }).first().click({ timeout: 20000 });
+    await page.waitForTimeout(3500);
+  });
 }
 
 await ensureLoggedIn();

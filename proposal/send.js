@@ -89,6 +89,23 @@ export async function sendProposal({ to, subject, bodyText, pdfPath }) {
   const recipients = (Array.isArray(to) ? to : String(to).split(/[,;]/))
     .map(s => s.trim()).filter(Boolean);
   if (!recipients.length) throw new Error('no recipients');
+
+  // Read the attachment up front: a failure here is a local-file problem
+  // (missing, or an iCloud-evicted placeholder that can't be read), not a
+  // mail problem — say so plainly instead of surfacing "system error -11".
+  let contentBytes;
+  try {
+    if (!existsSync(pdfPath)) throw Object.assign(new Error('file not found'), { code: 'ENOENT' });
+    contentBytes = readFileSync(pdfPath).toString('base64');
+  } catch (e) {
+    throw Object.assign(
+      new Error(`Could not read the proposal PDF at ${pdfPath} (${e.code ?? e.message}). ` +
+        'If the repo is in iCloud Drive, the file may be evicted to the cloud — open the ' +
+        'proposals folder in Finder and download it, or regenerate the proposal.'),
+      { code: 'NO_PDF' }
+    );
+  }
+
   const token = await accessToken();
   const res = await fetch('https://graph.microsoft.com/v1.0/me/sendMail', {
     method: 'POST',
@@ -103,7 +120,7 @@ export async function sendProposal({ to, subject, bodyText, pdfPath }) {
           '@odata.type': '#microsoft.graph.fileAttachment',
           name: basename(pdfPath),
           contentType: 'application/pdf',
-          contentBytes: readFileSync(pdfPath).toString('base64'),
+          contentBytes,
         }],
       },
     }),
